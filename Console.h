@@ -11,8 +11,8 @@ public:
 
     void displayHeader() {
         std::cout << CSOPESY_HEADER << std::endl;
-        std::cout << "Hello! Welcome to CSOPESY commandline!" << std::endl;
-        std::cout << "Type 'exit' to quit, 'clear' to refresh the screen." << std::endl;
+    	std::cout << "\033[32mHello! Welcome to CSOPESY commandline!\033[0m" << std::endl;
+        std::cout << "\033[93mType 'exit' to quit, 'clear' to refresh the screen.\033[0m" << std::endl;
         std::cout << std::endl;
     }
 
