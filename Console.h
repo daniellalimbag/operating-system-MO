@@ -4,6 +4,8 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>
+#include <vector>
+#include <algorithm>
 #include "Header.h"
 
 class OpesyConsole {
@@ -12,37 +14,36 @@ public:
 
     void displayHeader() {
         std::cout << CSOPESY_HEADER << std::endl;
-    	std::cout << "\033[32mHello! Welcome to CSOPESY commandline!\033[0m" << std::endl;
+        std::cout << "\033[32mHello! Welcome to CSOPESY commandline!\033[0m" << std::endl;
         std::cout << "\033[93mType 'exit' to quit, 'clear' to refresh the screen.\033[0m" << std::endl;
         std::cout << std::endl;
     }
 
-    void processCommand(std::string command) {
-        if (command == "initialize") {
-            std::cout << command << " command recognized. Doing something." << std::endl;
-        }
-        else if (command == "screen") {
-            std::cout << command << " command recognized. Doing something." << std::endl;
-        }
-        else if (command == "scheduler-test") {
-            std::cout << command << " command recognized. Doing something." << std::endl;
-        }
-        else if (command == "scheduler-stop") {
-            std::cout << command << " command recognized. Doing something." << std::endl;
-        }
-        else if (command == "report-util") {
-            std::cout << command << " command recognized. Doing something." << std::endl;
-        }
-        else if (command == "clear") {
+    bool validateCommand(const std::string& command) {
+        static const std::vector<std::string> validCommands = {
+            "initialize", "screen", "scheduler-test", "scheduler-stop", "report-util"
+        };
+        
+        return std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end();
+    }
+
+    void executeCommand(const std::string& command) {
+        std::cout << command << " command recognized. Doing something." << std::endl;
+    }
+
+    void processCommand(const std::string& command) {
+        if (command == "clear") {
             system("cls");
             displayHeader();
-        }
-        else if (command == "exit") {
+        } else if (command == "exit") {
             std::cout << "Exiting CSOPESY CLI..." << std::endl;
             exit(0);
-        }
-        else {
-            std::cout << command << " command unrecognized. Enter a valid command." << std::endl;
+        } else {
+            if (validateCommand(command)) {
+                executeCommand(command);
+            } else {
+                std::cout << command << " command unrecognized. Enter a valid command." << std::endl;
+            }
         }
         std::cout << std::endl;
     }
