@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <cstdlib>
 #include "Header.h"
 
 class OpesyConsole {
@@ -33,6 +34,7 @@ public:
             std::cout << command << " command recognized. Doing something." << std::endl;
         }
         else if (command == "clear") {
+            system("cls");
             displayHeader();
         }
         else if (command == "exit") {
