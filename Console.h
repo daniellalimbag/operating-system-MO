@@ -6,9 +6,15 @@
 #include <cstdlib>
 #include <vector>
 #include <algorithm>
+#include <map>
+#include <ctime>
 #include "Header.h"
+#include "Screen.h"
 
 class OpesyConsole {
+private:
+    std::map<std::string, Screen> screens; //this stores screen sessions
+
 public:
     OpesyConsole() {}
 
@@ -21,14 +27,64 @@ public:
 
     bool validateCommand(const std::string& command) {
         static const std::vector<std::string> validCommands = {
-            "initialize", "screen", "scheduler-test", "scheduler-stop", "report-util"
+            "initialize", "screen -ls", "scheduler-test", "scheduler-stop", "report-util", "exit", "clear"
         };
-        
+
+        if (command.rfind("screen -s ", 0) == 0 || command.rfind("screen -r ", 0) == 0) {
+            return true;
+        }
+
         return std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end();
     }
 
     void executeCommand(const std::string& command) {
-        std::cout << command << " command recognized. Doing something." << std::endl;
+        if (command.rfind("screen -s ", 0) == 0) {
+            std::string sessionName = command.substr(10);
+            if (screens.count(sessionName) == 0) {
+                screens.emplace(sessionName, Screen(sessionName));
+                sessionLoop(sessionName);
+            } else {
+                std::cout << "Screen session '" << sessionName << "' already exists." << std::endl;
+            }
+        } else if (command.rfind("screen -r ", 0) == 0) {
+            std::string sessionName = command.substr(10);
+            if (screens.find(sessionName) != screens.end()) {
+                sessionLoop(sessionName);
+            } else {
+                std::cout << "Screen session '" << sessionName << "' does not exist." << std::endl;
+            }
+        } else if (command == "screen -ls") {
+            if (screens.empty()) {
+                std::cout << "No active screen sessions." << std::endl;
+            } else {
+                std::cout << "Active screen sessions:" << std::endl;
+                for (const auto& [name, screen] : screens) {
+                    screen.viewSummary();
+                }
+            }
+        } else {
+            std::cout << command << " command recognized. Doing something." << std::endl;
+        }
+    }
+
+    //after creating or switching to a screen session
+    void sessionLoop(const std::string& sessionName) {
+        auto it = screens.find(sessionName);
+        if (it == screens.end()) return;
+        Screen& session = it->second;
+        std::string input;
+        while (true) {
+            session.viewSession();
+            std::cout << "(screen: " << sessionName << ") $ ";
+            std::getline(std::cin, input);
+            if (input == "exit") {
+                system("cls");
+                displayHeader();
+                break;
+            } else {
+                std::cout << "Unknown command. Type 'exit' to return to main menu.\n";
+            }
+        }
     }
 
     void processCommand(const std::string& command) {
@@ -51,7 +107,7 @@ public:
     void run() {
         std::string command;
         displayHeader();
-        
+
         while (true) {
             std::cout << "Enter a command: ";
             std::getline(std::cin, command);
