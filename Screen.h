@@ -29,7 +29,6 @@ public:
         std::cout << "Process Name: " << processName << "\n";
         std::cout << "Instruction Line: " << currentLine << " / " << totalLines << "\n";
         std::cout << "Timestamp: " << timestamp << "\n";
-        std::cout << "Type 'exit' to return to main menu.\n";
     }
 
     void viewSummary() const {

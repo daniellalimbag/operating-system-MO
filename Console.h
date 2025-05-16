@@ -75,7 +75,8 @@ public:
         std::string input;
         while (true) {
             session.viewSession();
-            std::cout << "(screen: " << sessionName << ") $ ";
+            std::cout << std::endl;
+            std::cout << "root:/> ";
             std::getline(std::cin, input);
             if (input == "exit") {
                 system("cls");
