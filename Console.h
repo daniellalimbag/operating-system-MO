@@ -13,7 +13,8 @@
 
 class OpesyConsole {
 private:
-    std::map<std::string, Screen> screens; //this stores screen sessions
+    // Map to store active screen sessions
+    std::map<std::string, Screen> screens;
 
 public:
     OpesyConsole() {}
@@ -25,6 +26,7 @@ public:
         std::cout << std::endl;
     }
 
+    // Validate if a command is recognized
     bool validateCommand(const std::string& command) {
         static const std::vector<std::string> validCommands = {
             "initialize", "screen -ls", "scheduler-test", "scheduler-stop", "report-util", "exit", "clear"
@@ -37,8 +39,10 @@ public:
         return std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end();
     }
 
+    // Execute a recognized command
     void executeCommand(const std::string& command) {
         if (command.rfind("screen -s ", 0) == 0) {
+            // Create a new screen
             std::string sessionName = command.substr(10);
             if (screens.count(sessionName) == 0) {
                 screens.emplace(sessionName, Screen(sessionName));
@@ -47,6 +51,7 @@ public:
                 std::cout << "Screen session '" << sessionName << "' already exists." << std::endl;
             }
         } else if (command.rfind("screen -r ", 0) == 0) {
+            // Resume an existing screen
             std::string sessionName = command.substr(10);
             if (screens.find(sessionName) != screens.end()) {
                 sessionLoop(sessionName);
@@ -54,6 +59,7 @@ public:
                 std::cout << "Screen session '" << sessionName << "' does not exist." << std::endl;
             }
         } else if (command == "screen -ls") {
+            // List all active screen sessions
             if (screens.empty()) {
                 std::cout << "No active screen sessions." << std::endl;
             } else {
@@ -67,7 +73,6 @@ public:
         }
     }
 
-    //after creating or switching to a screen session
     void sessionLoop(const std::string& sessionName) {
         auto it = screens.find(sessionName);
         if (it == screens.end()) return;
@@ -105,6 +110,7 @@ public:
         std::cout << std::endl;
     }
 
+    // Main loop
     void run() {
         std::string command;
         displayHeader();

@@ -12,9 +12,12 @@ class Screen {
     int totalLines;
 
 public:
+    // Delete default constructor to initialize with a process name
     Screen() = delete;
-    Screen(const std::string& name, int total = 5)
+
+    Screen(const std::string& name, int total = 5) //Hardcoded total lines
         : processName(name), currentLine(1), totalLines(total) {
+        // Generate a timestamp
         auto now = std::chrono::system_clock::now();
         auto now_time_t = std::chrono::system_clock::to_time_t(now);
         std::tm local_tm;
@@ -24,17 +27,20 @@ public:
         timestamp = oss.str();
     }
 
+    // Display the session details
     void viewSession() const {
-        system("cls");
+        system("cls"); // Clear the console screen
         std::cout << "Process Name: " << processName << "\n";
         std::cout << "Instruction Line: " << currentLine << " / " << totalLines << "\n";
         std::cout << "Timestamp: " << timestamp << "\n";
     }
 
+    // Display a summary of the session
     void viewSummary() const {
         std::cout << "Process Name: " << processName << " | Created: " << timestamp << std::endl;
     }
 
+    // Getters
     std::string getProcessName() const { return processName; }
     std::string getTimestamp() const { return timestamp; }
     int getCurrentLine() const { return currentLine; }
