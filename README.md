@@ -1,5 +1,7 @@
 # CSOPESY MP
 
+Note from Dani: Guys if you are working on indiv assignments/seatwork don't push it here. Just save locally
+
 ## Overview
 This is the first group machine project in CSOPESY: Process Multiplexer and CLI.
 
