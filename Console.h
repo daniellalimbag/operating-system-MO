@@ -84,7 +84,7 @@ public:
             std::cout << "root:/> ";
             std::getline(std::cin, input);
             if (input == "exit") {
-                system("cls");
+                std::cout << "\033[2J\033[H"; // ANSI code to clear screen and move cursor to top-left
                 displayHeader();
                 break;
             } else {
@@ -95,7 +95,7 @@ public:
 
     void processCommand(const std::string& command) {
         if (command == "clear") {
-            system("cls");
+            std::cout << "\033[2J\033[H"; // ANSI code to clear screen and move cursor to top-left
             displayHeader();
         } else if (command == "exit") {
             std::cout << "Exiting CSOPESY CLI..." << std::endl;
