@@ -6,6 +6,7 @@
             "type": "shell",
             "command": "g++",
             "args": [
+                "-std=c++20",
                 "-g",
                 "Main.cpp",
                 "-o",
@@ -15,7 +16,17 @@
             "problemMatcher": [
                 "$gcc"
             ],
-            "detail": "Builds the CSOPESY console app"
+            "detail": "Builds the CSOPESY console app",
+            "osx": { // macos compatibility
+                "command": "g++",
+                "args": [
+                    "-std=c++20",
+                    "-g",
+                    "Main.cpp",
+                    "-o",
+                    "csopesy"
+                ]
+            }
         },
         {
             "type": "cppbuild",

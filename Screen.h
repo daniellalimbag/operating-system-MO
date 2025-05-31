@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+#include <ctime>
 
 class Screen {
     std::string processName;
@@ -21,7 +22,11 @@ public:
         auto now = std::chrono::system_clock::now();
         auto now_time_t = std::chrono::system_clock::to_time_t(now);
         std::tm local_tm;
-        localtime_s(&local_tm, &now_time_t);
+        #ifdef _WIN32 // windows-specific
+            localtime_s(&local_tm, &now_time_t);
+        #else // for macos compatibility
+            localtime_r(&now_time_t, &local_tm);
+        #endif
         std::ostringstream oss;
         oss << std::put_time(&local_tm, "%m/%d/%Y, %I:%M:%S %p");
         timestamp = oss.str();
@@ -29,7 +34,7 @@ public:
 
     // Display the session details
     void viewSession() const {
-        system("cls"); // Clear the console screen
+        std::cout << "\033[2J\033[H"; // ANSI code to clear screen and move cursor to top-left
         std::cout << "Process Name: " << processName << "\n";
         std::cout << "Instruction Line: " << currentLine << " / " << totalLines << "\n";
         std::cout << "Timestamp: " << timestamp << "\n";
