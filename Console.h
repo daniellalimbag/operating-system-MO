@@ -6,18 +6,117 @@
 #include <cstdlib>
 #include <vector>
 #include <algorithm>
-#include <map>
 #include <ctime>
+#include <conio.h>
 #include "Header.h"
-#include "Screen.h"
+#include "Process.h"
+#include "ProcessManager.h"
+#include "Scheduler.h"
 
 class OpesyConsole {
 private:
-    // Map to store active screen sessions
-    std::map<std::string, Screen> screens;
+    ProcessManager processManager;
+    Scheduler scheduler{processManager};
+
+    // Helper methods to reduce repetition
+    void clearAndDisplayHeader() {
+        system("cls");
+        displayHeader();
+    }
+
+    void displayProcessInfo(const std::string& sessionName, int pid, bool showDetails = false) {
+        auto process = processManager.getProcess(pid);
+        if (!process) return;
+
+        std::cout << "Process name: " << sessionName << std::endl;
+        
+        if (showDetails) {
+            std::cout << "ID: " << pid << std::endl;
+            std::cout << "Core: " << (process->getCore() == -1 ? "N/A" : std::to_string(process->getCore())) << std::endl;
+            std::cout << "CPU Utilization: " << process->getCPUUtilization() << "%" << std::endl;
+        }
+        
+        std::cout << "Logs:" << std::endl << std::endl;
+        
+        std::string logs = process->getLogs();
+        std::cout << (logs.empty() ? "No logs available yet." : logs) << std::endl;
+        
+        if (process->isComplete()) {
+            std::cout << "Finished!" << std::endl;
+        } else {
+            std::cout << "Current instruction line: " << process->getCurrentInstructionNumber() 
+                     << " / " << process->getTotalInstructions() << std::endl;
+        }
+        std::cout << std::endl;
+    }
+
+    bool handleScreenCommand(const std::string& command) {
+        if (command.rfind("screen -s ", 0) == 0) {
+            std::string processName = command.substr(10);
+            int pid = processManager.createProcess(processName);
+            std::cout << "Created screen session '" << processName << "'" << std::endl;
+            scheduler.addProcess(pid);
+            sessionLoop(processName, pid);
+            return true;
+        }
+        
+        if (command.rfind("screen -r ", 0) == 0) {
+            std::string processName = command.substr(10);
+            auto processes = processManager.getAllProcesses();
+            
+            for (const auto& process : processes) {
+                if (process->getProcessName() == processName) {
+                    sessionLoop(processName, process->getPID());
+                    return true;
+                }
+            }
+            std::cout << "Screen session '" << processName << "' does not exist." << std::endl;
+            return true;
+        }
+        
+        return false;
+    }
+
+    void displayProcessesByStatus(bool showRunning) {
+        auto processes = processManager.getAllProcesses();
+        std::cout << (showRunning ? "Running" : "Finished") << " processes:" << std::endl;
+        
+        for (const auto& process : processes) {
+            bool isRunning = !process->isComplete();
+            if (isRunning == showRunning) {
+                auto timestamp = process->getTimestamp();
+                std::cout << process->getProcessName() << "\t(" << timestamp << ")\t";
+                
+                if (showRunning) {
+                    std::cout << "Core: " << (process->getCore() == -1 ? "N/A" : std::to_string(process->getCore()))
+                             << "  " << process->getCPUUtilization() << " / 100";
+                } else {
+                    std::cout << "Finished 100 / 100";
+                }
+                std::cout << std::endl;
+            }
+        }
+        std::cout << std::endl;
+    }
 
 public:
-    OpesyConsole() {}
+    OpesyConsole() {
+        // Create 10 processes, each with 100 print commands (To be removed: This is for the week 6 homework)
+        for (int i = 1; i <= 10; ++i) {
+            std::string pname = std::string("process") + (i < 10 ? "0" : "") + std::to_string(i);
+            int pid = processManager.createProcess(pname);
+            Process* proc = processManager.getProcess(pid);
+            
+            if (proc) {
+                for (int j = 1; j <= 100; ++j) {
+                    proc->addInstruction("PRINT(\"Hello world from " + pname + "!\")");
+                }
+                proc->addInstruction("EXIT");
+            }
+            scheduler.addProcess(pid);
+        }
+        scheduler.start();
+    }
 
     void displayHeader() {
         std::cout << CSOPESY_HEADER << std::endl;
@@ -26,77 +125,82 @@ public:
         std::cout << std::endl;
     }
 
-    // Validate if a command is recognized
     bool validateCommand(const std::string& command) {
         static const std::vector<std::string> validCommands = {
-            "initialize", "screen -ls", "scheduler-test", "scheduler-stop", "report-util", "exit", "clear"
+            "initialize", "screen -ls", "scheduler-start", "scheduler-stop", "report-util", "exit", "clear"
         };
 
-        if (command.rfind("screen -s ", 0) == 0 || command.rfind("screen -r ", 0) == 0) {
-            return true;
-        }
-
-        return std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end();
+        return (command.rfind("screen -s ", 0) == 0 || 
+                command.rfind("screen -r ", 0) == 0 || 
+                std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end());
     }
 
-    // Execute a recognized command
     void executeCommand(const std::string& command) {
-        if (command.rfind("screen -s ", 0) == 0) {
-            // Create a new screen
-            std::string sessionName = command.substr(10);
-            if (screens.count(sessionName) == 0) {
-                screens.emplace(sessionName, Screen(sessionName));
-                sessionLoop(sessionName);
-            } else {
-                std::cout << "Screen session '" << sessionName << "' already exists." << std::endl;
-            }
-        } else if (command.rfind("screen -r ", 0) == 0) {
-            // Resume an existing screen
-            std::string sessionName = command.substr(10);
-            if (screens.find(sessionName) != screens.end()) {
-                sessionLoop(sessionName);
-            } else {
-                std::cout << "Screen session '" << sessionName << "' does not exist." << std::endl;
-            }
-        } else if (command == "screen -ls") {
-            // List all active screen sessions
-            if (screens.empty()) {
-                std::cout << "No active screen sessions." << std::endl;
-            } else {
-                std::cout << "Active screen sessions:" << std::endl;
-                for (const auto& [name, screen] : screens) {
-                    screen.viewSummary();
-                }
-            }
-        } else {
+        if (handleScreenCommand(command)) {
+            return;
+        }
+        
+        if (command == "screen -ls") {
+            displayProcessStatus();
+        }
+        else if (command == "scheduler-start") {
+            scheduler.start();
+            std::cout << "Scheduler started." << std::endl;
+        }
+        else if (command == "scheduler-stop") {
+            scheduler.stop();
+            std::cout << "Scheduler stopped." << std::endl;
+        }
+        else {
             std::cout << command << " command recognized. Doing something." << std::endl;
         }
     }
 
-    void sessionLoop(const std::string& sessionName) {
-        auto it = screens.find(sessionName);
-        if (it == screens.end()) return;
-        Screen& session = it->second;
+    void displayProcessStatus() const {
+        std::cout << "----------------------------------------" << std::endl;
+        const_cast<OpesyConsole*>(this)->displayProcessesByStatus(true);  // Running processes
+        const_cast<OpesyConsole*>(this)->displayProcessesByStatus(false); // Finished processes
+        std::cout << "----------------------------------------" << std::endl;
+    }
+
+    void sessionLoop(const std::string& sessionName, int pid) {
+        auto process = processManager.getProcess(pid);
+        if (!process) return;
+
         std::string input;
         while (true) {
-            session.viewSession();
-            std::cout << std::endl;
+            system("cls");
+            displayProcessInfo(sessionName, pid, false);
             std::cout << "root:/> ";
             std::getline(std::cin, input);
+            
             if (input == "exit") {
-                std::cout << "\033[2J\033[H"; // ANSI code to clear screen and move cursor to top-left
-                displayHeader();
+                clearAndDisplayHeader();
                 break;
-            } else {
-                std::cout << "Unknown command. Type 'exit' to return to main menu.\n";
+            }
+            
+            if (input == "process-smi") {
+                system("cls");
+                displayProcessInfo(sessionName, pid, true);
+                continue;
+            }
+            
+            // Execute process instruction
+            std::string result = processManager.executeProcessInstruction(pid);
+            if (process->isComplete()) {
+                system("cls");
+                displayProcessInfo(sessionName, pid, false);
+                std::cout << "Process completed. Press Enter to continue...";
+                std::getline(std::cin, input);
+                clearAndDisplayHeader();
+                break;
             }
         }
     }
 
     void processCommand(const std::string& command) {
         if (command == "clear") {
-            std::cout << "\033[2J\033[H"; // ANSI code to clear screen and move cursor to top-left
-            displayHeader();
+            clearAndDisplayHeader();
         } else if (command == "exit") {
             std::cout << "Exiting CSOPESY CLI..." << std::endl;
             exit(0);
@@ -106,11 +210,10 @@ public:
             } else {
                 std::cout << command << " command unrecognized. Enter a valid command." << std::endl;
             }
+            std::cout << std::endl;
         }
-        std::cout << std::endl;
     }
 
-    // Main loop
     void run() {
         std::string command;
         displayHeader();
