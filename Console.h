@@ -83,12 +83,14 @@ private:
         
         for (const auto& process : processes) {
             bool isRunning = !process->isComplete();
+            int core = process->getCore();
             if (isRunning == showRunning) {
+                if (showRunning && core == -1) continue; // To be removed? (Only displays processes that have been assigned a core)
                 auto timestamp = process->getTimestamp();
                 std::cout << process->getProcessName() << "\t(" << timestamp << ")\t";
                 
                 if (showRunning) {
-                    std::cout << "Core: " << (process->getCore() == -1 ? "N/A" : std::to_string(process->getCore()))
+                    std::cout << "Core: " << std::to_string(core)
                              << "  " << process->getCPUUtilization() << " / 100";
                 } else {
                     std::cout << "Finished 100 / 100";
