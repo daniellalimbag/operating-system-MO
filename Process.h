@@ -34,7 +34,7 @@ public:
         std::tm local_tm;
         localtime_s(&local_tm, &now_time_t);
         std::ostringstream oss;
-        oss << std::put_time(&local_tm, "%m/%d/%Y, %I:%M:%S %p");
+        oss << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p");
         timestamp = oss.str();
     }
 
@@ -49,15 +49,26 @@ public:
         std::tm local_tm;
         localtime_s(&local_tm, &now_time_t);
         std::ostringstream oss;
-        oss << std::put_time(&local_tm, "%m/%d/%Y, %I:%M:%S %p");
+        oss << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p");
         std::string currentTime = oss.str();
         
         // Get the current instruction
         std::string instruction = instructions[currentInstruction];
-        std::string logEntry = "(" + currentTime + ") Core: " + 
-                             std::to_string(core_assigned) + " \"" + 
-                             instruction + "\"";
-        
+        std::string message;
+        if (instruction.find("PRINT(") == 0) {
+            size_t start = instruction.find('"');
+            size_t end = instruction.rfind('"');
+            if (start != std::string::npos && end != std::string::npos && end > start) {
+                message = instruction.substr(start + 1, end - start - 1);
+            } else {
+                message = instruction;
+            }
+        } else {
+            message = instruction;
+        }
+        std::string logEntry = "(" + currentTime + ") Core: " +
+                             std::to_string(core_assigned) + " \"" +
+                             message + "\"";
         logs.emplace_back(currentTime, logEntry);
         
         currentInstruction++;

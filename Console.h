@@ -18,7 +18,6 @@ private:
     ProcessManager processManager;
     Scheduler scheduler{processManager};
 
-    // Helper methods to reduce repetition
     void clearAndDisplayHeader() {
         system("cls");
         displayHeader();
@@ -103,7 +102,7 @@ private:
 
 public:
     OpesyConsole() {
-        // Create 10 processes, each with 100 print commands (To be removed: This is for the week 6 homework)
+        // Hardcoded: Create 10 processes, each with 100 print commands (To be removed: This is for the week 6 homework)
         for (int i = 1; i <= 10; ++i) {
             std::string pname = std::string("process") + (i < 10 ? "0" : "") + std::to_string(i);
             int pid = processManager.createProcess(pname);

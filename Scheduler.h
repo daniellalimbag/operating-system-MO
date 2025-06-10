@@ -92,8 +92,8 @@ private:
         auto now_time_t = std::chrono::system_clock::to_time_t(now);
         std::tm local_tm;
         localtime_s(&local_tm, &now_time_t);
-        // Format: (MM/DD/YYYY, HH:MM:SS AM/PM) Core: <core> "message"
-        ofs << "(" << std::put_time(&local_tm, "%m/%d/%Y, %I:%M:%S %p") << ") Core: " << core << " " << msg << std::endl;
+        // Format: (MM/DD/YYYY HH:MM:SS AM/PM) Core: <core> "message"
+        ofs << "(" << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p") << ") Core: " << core << " \"" << msg << "\"" << std::endl;
     }
 
     std::string getLogFileName(Process* process) {
