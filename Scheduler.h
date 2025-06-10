@@ -7,6 +7,11 @@
 #include <fstream>
 #include "ProcessManager.h"
 
+enum class SchedulingAlgorithm {
+    FCFS,
+    //to be added
+};
+
 class Scheduler {
 private:
     static const int NUM_CORES = 4;
@@ -19,20 +24,32 @@ private:
     std::vector<std::atomic<bool>> coreBusy;
     std::vector<std::atomic<int>> coreProcess;
     std::atomic<bool> running;
+    SchedulingAlgorithm algorithm;
+
+    void scheduleFCFS() {
+        for (int core = 0; core < NUM_CORES; ++core) {
+            if (!coreBusy[core] && !readyQueue.empty()) {
+                int pid = readyQueue.front();
+                readyQueue.pop();
+                coreBusy[core] = true;
+                coreProcess[core] = pid;
+                processManager.assignProcessToCore(pid, core);
+            }
+        }
+    }
 
     void schedulerLoop() {
         while (running) {
             std::unique_lock<std::mutex> lock(queueMutex);
             cv.wait(lock, [&] { return !readyQueue.empty() || !running; });
             if (!running) break;
-            for (int core = 0; core < NUM_CORES; ++core) {
-                if (!coreBusy[core] && !readyQueue.empty()) {
-                    int pid = readyQueue.front();
-                    readyQueue.pop();
-                    coreBusy[core] = true;
-                    coreProcess[core] = pid;
-                    processManager.assignProcessToCore(pid, core);
-                }
+            switch (algorithm) {
+                case SchedulingAlgorithm::FCFS:
+                    scheduleFCFS();
+                    break;
+                // case SchedulingAlgorithm::ROUND_ROBIN:
+                //     scheduleRoundRobin();
+                //     break;
             }
         }
     }
@@ -84,8 +101,8 @@ private:
     }
 
 public:
-    Scheduler(ProcessManager& pm)
-        : processManager(pm), running(false), coreBusy(NUM_CORES), coreProcess(NUM_CORES) {
+    Scheduler(ProcessManager& pm, SchedulingAlgorithm algo = SchedulingAlgorithm::FCFS)
+        : processManager(pm), running(false), coreBusy(NUM_CORES), coreProcess(NUM_CORES), algorithm(algo) {
         for (int i = 0; i < NUM_CORES; ++i) {
             coreBusy[i] = false;
             coreProcess[i] = -1;
