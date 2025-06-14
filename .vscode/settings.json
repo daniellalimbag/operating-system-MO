@@ -118,6 +118,8 @@
     "semaphore": "cpp",
     "stop_token": "cpp",
     "thread": "cpp",
-    "codecvt": "cpp"
+    "codecvt": "cpp",
+    "ranges": "cpp",
+    "text_encoding": "cpp"
   }
 }
