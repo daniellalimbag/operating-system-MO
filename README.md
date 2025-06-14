@@ -1,7 +1,5 @@
 # CSOPESY MP
 
-Note from Dani: Guys if you are working on indiv assignments/seatwork don't push it here. Just save locally
-
 ## Overview
 
 This is the first group machine project in CSOPESY: Process Multiplexer and CLI. It simulates a multi-core CPU scheduler and process management system, inspired by Linux's `screen` command and typical shell environments. The system supports process creation, scheduling, and execution of basic instructions, with logging and reporting features.
@@ -59,23 +57,89 @@ delays-per-exec 0
 - **delays-per-exec**: Delay per instruction (in CPU cycles)
 
 ## How to Build
-To build the project, use the provided build task in Visual Studio Code:
 
-1. Open the command palette (`Ctrl+Shift+P`) and select `Tasks: Run Task`.
-2. Choose the `build csopesy` task to compile the project.
+### A. Manually (Command Line)
+1. Open a terminal in the project directory.
+2. Compile the project using g++:
+   ```sh
+   g++ -g Main.cpp -o csopesy.exe
+   ```
+   - If you add more `.cpp` files, include them in the command above.
 
-Alternatively, you can compile the project manually using the following command:
-
-```bash
-powershell.exe g++ -g Main.cpp -o csopesy.exe
-```
+### B. In Visual Studio Code (VSCode)
+1. Open the project folder in VSCode.
+2. Build using Tasks:
+   - Press `Ctrl+Shift+P` to open the Command Palette.
+   - Type and select `Tasks: Run Task`.
+   - Choose the `build csopesy` task (if available).
+   - If you don't see a build task, you may need to create or update `.vscode/tasks.json` (see below).
 
 ## How to Run
-After building the project, run the executable:
 
-```bash
-powershell.exe .\csopesy.exe
-```
+### A. Manually (Command Line)
+1. After building, run:
+   ```sh
+   .\csopesy.exe
+   ```
+
+### B. In Visual Studio Code (Run/Debug Button)
+1. Open `Main.cpp` or any source file.
+2. Press `F5` or click the green "Run" button in the Run & Debug sidebar.
+3. If prompted, select `C++ (GDB/LLDB)` or `C++ (Windows)` as the environment.
+4. If you don't have a launch configuration, VSCode will offer to create one. Accept and ensure your `.vscode/launch.json` looks like this:
+   ```json
+   {
+     "version": "0.2.0",
+     "configurations": [
+       {
+         "name": "Run csopesy.exe",
+         "type": "cppvsdbg",
+         "request": "launch",
+         "program": "${workspaceFolder}/csopesy.exe",
+         "args": [],
+         "stopAtEntry": false,
+         "cwd": "${workspaceFolder}",
+         "environment": [],
+         "console": "integratedTerminal"
+       }
+     ]
+   }
+   ```
+5. Now you can use the Run/Debug controls in VSCode to start, stop, and debug your program.
+
+## VSCode Configuration Files
+
+- **.vscode/tasks.json** (for building):
+  ```json
+  {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "build csopesy",
+        "type": "shell",
+        "command": "g++",
+        "args": [
+          "-g",
+          "Main.cpp",
+          "-o",
+          "csopesy.exe"
+        ],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": ["$gcc"]
+      }
+    ]
+  }
+  ```
+- **.vscode/launch.json** (for running/debugging):  
+  (see above)
+
+**Note:**
+- Make sure you have the C++ extension installed in VSCode (e.g., "C/C++" by Microsoft).
+- If you use additional source files, add them to the build command and tasks.
+- If you encounter issues, check your compiler installation and environment variables.
 
 ## File Structure
 - `Main.cpp`: Entry point of the application.
