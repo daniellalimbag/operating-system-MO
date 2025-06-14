@@ -22,6 +22,29 @@ private:
     Scheduler scheduler{processManager};
     SystemConfig config;
     bool initialized = false;
+    std::thread processGeneratorThread;
+    std::atomic<bool> generating = false;
+    int processCounter = 1;
+
+    void processGenerationLoop() {
+        while (generating) {
+            std::string name = "p" + std::string(processCounter < 10 ? "0" : "") + std::to_string(processCounter++);
+            int pid = processManager.createProcess(name);
+            Process* proc = processManager.getProcess(pid);
+            if (proc) {
+                int instructionCount = rand() % (config.maxInstructions - config.minInstructions + 1) + config.minInstructions;
+                for (int i = 0; i < instructionCount; ++i) {
+                    proc->addInstruction("PRINT(\"Hello from " + name + " - line " + std::to_string(i + 1) + "\")");
+                }
+                proc->addInstruction("EXIT");
+            }
+            scheduler.addProcess(pid);
+            int delay = config.batchProcessFreq;
+            for (int i = 0; i < delay && generating; ++i) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
+    }
 
     bool readConfigFromFile(const std::string& filename) {
         std::ifstream file(filename);
@@ -180,11 +203,21 @@ public:
         }
         else if (command == "scheduler-start") {
             scheduler.start();
-            std::cout << "Scheduler started." << std::endl;
+            if (!generating) {
+                generating = true;
+                processGeneratorThread = std::thread(&OpesyConsole::processGenerationLoop, this);
+            }
+            std::cout << "Scheduler started. Dummy process generation initiated." << std::endl;
         }
         else if (command == "scheduler-stop") {
+            if (generating) {
+                generating = false;
+                if (processGeneratorThread.joinable()) {
+                    processGeneratorThread.join();
+                }
+            }
             scheduler.stop();
-            std::cout << "Scheduler stopped." << std::endl;
+            std::cout << "Scheduler and dummy process generation stopped." << std::endl;
         }
         else {
             std::cout << command << " command recognized. Doing something." << std::endl;
@@ -208,27 +241,35 @@ public:
             displayProcessInfo(sessionName, pid, false);
             std::cout << "root:/> ";
             std::getline(std::cin, input);
-            
+
             if (input == "exit") {
                 clearAndDisplayHeader();
-                break;
+                return;
             }
-            
+
             if (input == "process-smi") {
                 system("cls");
                 displayProcessInfo(sessionName, pid, true);
                 continue;
             }
-            
+
             // Execute process instruction
             std::string result = processManager.executeProcessInstruction(pid);
+
             if (process->isComplete()) {
                 system("cls");
                 displayProcessInfo(sessionName, pid, false);
-                std::cout << "Process completed. Press Enter to continue...";
-                std::getline(std::cin, input);
+                std::cout << "Process completed. Press Enter to continue..." << std::endl;
+
+                // Flush stdin just in case
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+                // Wait for Enter
+                std::getline(std::cin, input);  // This is better than cin.get() in this case
+
                 clearAndDisplayHeader();
-                break;
+                return;
             }
         }
     }
@@ -236,6 +277,12 @@ public:
     void processCommand(const std::string& command) {
         if (command == "exit") {
             std::cout << "Exiting CSOPESY CLI..." << std::endl;
+            if (generating) {
+                generating = false;
+                if (processGeneratorThread.joinable()) {
+                    processGeneratorThread.join();
+                }
+            } // if it is still generating processes it should stop on exit
             exit(0);
         }
 
@@ -243,13 +290,13 @@ public:
             initialized = readConfigFromFile("config.txt");
             if (initialized) {
                 std::cout << "\n System successfully initialized from config.txt:\n";
-                std::cout << "  • num-cpu: " << config.numCPU << '\n';
-                std::cout << "  • scheduler: " << config.scheduler << '\n';
-                std::cout << "  • quantum-cycles: " << config.quantumCycles << '\n';
-                std::cout << "  • batch-process-freq: " << config.batchProcessFreq << '\n';
-                std::cout << "  • min-ins: " << config.minInstructions << '\n';
-                std::cout << "  • max-ins: " << config.maxInstructions << '\n';
-                std::cout << "  • delay-per-exec: " << config.delaysPerExec << "\n\n";
+                std::cout << "num-cpu: " << config.numCPU << '\n';
+                std::cout << "scheduler: " << config.scheduler << '\n';
+                std::cout << "quantum-cycles: " << config.quantumCycles << '\n';
+                std::cout << "batch-process-freq: " << config.batchProcessFreq << '\n';
+                std::cout << "min-ins: " << config.minInstructions << '\n';
+                std::cout << "max-ins: " << config.maxInstructions << '\n';
+                std::cout << "delay-per-exec: " << config.delaysPerExec << "\n\n";
             } else {
                 std::cout << "Failed to initialize system from config.txt\n";
             }
