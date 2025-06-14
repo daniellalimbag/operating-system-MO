@@ -1,0 +1,9 @@
+# Ignore the compiled executable
+Main.exe
+# Ignore the config file
+config.txt
+# Ignore all VSCode settings (optional)
+.vscode/
+.vscode/c_cpp_properties.json
+.vscode/tasks.json
+.git/
