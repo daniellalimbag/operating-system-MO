@@ -12,11 +12,44 @@
 #include "Process.h"
 #include "ProcessManager.h"
 #include "Scheduler.h"
+#include "Config.h"
+#include <fstream>
+#include <sstream>
 
 class OpesyConsole {
 private:
     ProcessManager processManager;
     Scheduler scheduler{processManager};
+    SystemConfig config;
+    bool initialized = false;
+
+    bool readConfigFromFile(const std::string& filename) {
+        std::ifstream file(filename);
+        if (!file.is_open()) {
+            std::cerr << "Error: Could not open config.txt\n";
+            return false;
+        }
+
+        std::string key;
+        while (file >> key) {
+            if (key == "num-cpu") file >> config.numCPU;
+            else if (key == "scheduler") file >> config.scheduler;
+            else if (key == "quantum-cycles") file >> config.quantumCycles;
+            else if (key == "batch-process-freq") file >> config.batchProcessFreq;
+            else if (key == "min-ins") file >> config.minInstructions;
+            else if (key == "max-ins") file >> config.maxInstructions;
+            else if (key == "delay-per-exec") file >> config.delaysPerExec;
+            else {
+                std::cerr << "Warning: Unknown config parameter: " << key << "\n";
+                std::string dummy;
+                file >> dummy;
+            }
+        }
+
+        file.close();
+        return true;
+    }
+
 
     void clearAndDisplayHeader() {
         system("cls");
@@ -103,7 +136,7 @@ private:
 public:
     OpesyConsole() {
         // Hardcoded: Create 10 processes, each with 100 print commands (To be removed: This is for the week 6 homework)
-        for (int i = 1; i <= 10; ++i) {
+        /*for (int i = 1; i <= 10; ++i) {
             std::string pname = std::string("process") + (i < 10 ? "0" : "") + std::to_string(i);
             int pid = processManager.createProcess(pname);
             Process* proc = processManager.getProcess(pid);
@@ -116,7 +149,7 @@ public:
             }
             scheduler.addProcess(pid);
         }
-        scheduler.start();
+        scheduler.start();*/
     }
 
     void displayHeader() {
@@ -137,6 +170,7 @@ public:
     }
 
     void executeCommand(const std::string& command) {
+
         if (handleScreenCommand(command)) {
             return;
         }
@@ -200,20 +234,44 @@ public:
     }
 
     void processCommand(const std::string& command) {
-        if (command == "clear") {
-            clearAndDisplayHeader();
-        } else if (command == "exit") {
+        if (command == "exit") {
             std::cout << "Exiting CSOPESY CLI..." << std::endl;
             exit(0);
-        } else {
-            if (validateCommand(command)) {
-                executeCommand(command);
-            } else {
-                std::cout << command << " command unrecognized. Enter a valid command." << std::endl;
-            }
-            std::cout << std::endl;
         }
+
+        if (command == "initialize") {
+            initialized = readConfigFromFile("config.txt");
+            if (initialized) {
+                std::cout << "\n System successfully initialized from config.txt:\n";
+                std::cout << "  • num-cpu: " << config.numCPU << '\n';
+                std::cout << "  • scheduler: " << config.scheduler << '\n';
+                std::cout << "  • quantum-cycles: " << config.quantumCycles << '\n';
+                std::cout << "  • batch-process-freq: " << config.batchProcessFreq << '\n';
+                std::cout << "  • min-ins: " << config.minInstructions << '\n';
+                std::cout << "  • max-ins: " << config.maxInstructions << '\n';
+                std::cout << "  • delay-per-exec: " << config.delaysPerExec << "\n\n";
+            } else {
+                std::cout << "Failed to initialize system from config.txt\n";
+            }
+            return;
+        }
+
+        if (!initialized) {
+            std::cout << "System not initialized. Please run 'initialize' before using any other command.\n";
+            return;
+        }
+
+        if (command == "clear") {
+            clearAndDisplayHeader();
+        } else if (validateCommand(command)) {
+            executeCommand(command);
+        } else {
+            std::cout << command << " command unrecognized. Enter a valid command." << std::endl;
+        }
+
+        std::cout << std::endl;
     }
+
 
     void run() {
         std::string command;

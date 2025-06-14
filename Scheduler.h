@@ -81,12 +81,13 @@ private:
             size_t end = instr.rfind('"');
             std::string msg = (start != std::string::npos && end != std::string::npos && end > start)
                 ? instr.substr(start + 1, end - start - 1) : instr;
-            logPrint(process, msg, core);
+            /*logPrint(process, msg, core);*/
+            // Commented out logPrint
         }
         // Other instructions can be handled here
     }
 
-    void logPrint(Process* process, const std::string& msg, int core) {
+    /*void logPrint(Process* process, const std::string& msg, int core) {
         std::ofstream ofs(getLogFileName(process), std::ios::app);
         auto now = std::chrono::system_clock::now();
         auto now_time_t = std::chrono::system_clock::to_time_t(now);
@@ -94,11 +95,11 @@ private:
         localtime_s(&local_tm, &now_time_t);
         // Format: (MM/DD/YYYY HH:MM:SS AM/PM) Core: <core> "message"
         ofs << "(" << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p") << ") Core: " << core << " \"" << msg << "\"" << std::endl;
-    }
+    }*/
 
-    std::string getLogFileName(Process* process) {
+    /*std::string getLogFileName(Process* process) {
         return process->getProcessName() + ".txt";
-    }
+    }*/
 
 public:
     Scheduler(ProcessManager& pm, SchedulingAlgorithm algo = SchedulingAlgorithm::FCFS)
