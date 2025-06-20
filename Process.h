@@ -4,7 +4,11 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
-#include <vector> 
+#include <vector>
+#include <mutex>
+
+// Add a mutex for thread-safe time access
+static std::mutex timeMutex;
 
 class Process {
 private:
@@ -22,17 +26,22 @@ public:
     Process() = delete;
 
     Process(const std::string& name, int id, int core = 1)
-        : processName(name), 
-          pid(id), 
+        : processName(name),
+          pid(id),
           core_assigned(core),
           cpu_utilization(0),
           currentInstruction(0),
           execution_complete(false) {
-        // Generate timestamp
+        // Generate timestamp using thread-safe approach
+        std::lock_guard<std::mutex> lock(timeMutex); // Lock for thread safety
         auto now = std::chrono::system_clock::now();
         auto now_time_t = std::chrono::system_clock::to_time_t(now);
         std::tm local_tm;
-        localtime_s(&local_tm, &now_time_t);
+        #ifdef _WIN32
+            localtime_s(&local_tm, &now_time_t); // Use localtime_s on Windows
+        #else
+            localtime_r(&now_time_t, &local_tm); // Use localtime_r on POSIX systems (macOS, Linux)
+        #endif
         std::ostringstream oss;
         oss << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p");
         timestamp = oss.str();
@@ -43,15 +52,20 @@ public:
             execution_complete = true;
             return "Finished!";
         }
-        
+        // Generate timestamp using thread-safe approach
+        std::lock_guard<std::mutex> lock(timeMutex); // Lock for thread safety
         auto now = std::chrono::system_clock::now();
         auto now_time_t = std::chrono::system_clock::to_time_t(now);
         std::tm local_tm;
-        localtime_s(&local_tm, &now_time_t);
+        #ifdef _WIN32
+            localtime_s(&local_tm, &now_time_t); // Use localtime_s on Windows
+        #else
+            localtime_r(&now_time_t, &local_tm); // Use localtime_r on POSIX systems (macOS, Linux)
+        #endif
         std::ostringstream oss;
         oss << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p");
         std::string currentTime = oss.str();
-        
+
         // Get the current instruction
         std::string instruction = instructions[currentInstruction];
         std::string message;
@@ -70,13 +84,13 @@ public:
                              std::to_string(core_assigned) + " \"" +
                              message + "\"";
         logs.emplace_back(currentTime, logEntry);
-        
+
         currentInstruction++;
-        
+
         if (currentInstruction >= instructions.size()) {
             execution_complete = true;
         }
-        
+
         return instruction;
     }
 
@@ -86,7 +100,11 @@ public:
 
     // Display
     void viewProcess() const {
-        system("cls");
+        #ifdef _WIN32
+            system("cls");
+        #else
+            system("clear");
+        #endif
         std::cout << "Process Name: " << processName << " (PID: " << pid << ")\n";
         std::cout << "Core Assigned: " << std::to_string(core_assigned) << "\n";
         std::cout << "CPU Utilization: " << cpu_utilization << "%\n";
@@ -98,8 +116,8 @@ public:
     }
 
     void viewSummary() const {
-        std::cout << "PID: " << pid << " | Name: " << processName 
-                 << " | Core: " << core_assigned 
+        std::cout << "PID: " << pid << " | Name: " << processName
+                 << " | Core: " << core_assigned
                  << " | CPU: " << cpu_utilization << "% | Created: " << timestamp << std::endl;
     }
 
@@ -113,7 +131,7 @@ public:
     size_t getTotalInstructions() const { return instructions.size(); }
     bool isComplete() const { return execution_complete; }
     std::string getLogFileName() const { return processName + ".txt"; }
-    
+
     std::string getLogs() const {
         std::string result;
         for (const auto& log : logs) {
@@ -125,4 +143,4 @@ public:
     // Setters
     void setCore(int core) { core_assigned = core; }
     void setCPUUtilization(int util) { cpu_utilization = util; }
-}; 
+};
