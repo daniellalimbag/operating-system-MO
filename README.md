@@ -63,9 +63,9 @@ delays-per-exec 0
 2. Compile the project using g++:
    ```sh
    # For Windows
-   g++ -g Main.cpp -o csopesy.exe
+   g++ -g Main.cpp -o csopesy.exe -std=c++20
    # For macOS/Linux
-   g++ -g Main.cpp -o csopesy
+   g++ -g Main.cpp -o csopesy -std=c++20
    ```
    - If you add more `.cpp` files, include them in the command above.
    - On macOS, `g++` might be an alias for `clang++`
