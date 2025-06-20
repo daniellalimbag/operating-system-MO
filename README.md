@@ -62,9 +62,13 @@ delays-per-exec 0
 1. Open a terminal in the project directory.
 2. Compile the project using g++:
    ```sh
+   # For Windows
    g++ -g Main.cpp -o csopesy.exe
+   # For macOS/Linux
+   g++ -g Main.cpp -o csopesy
    ```
    - If you add more `.cpp` files, include them in the command above.
+   - On macOS, `g++` might be an alias for `clang++`
 
 ### B. In Visual Studio Code (VSCode)
 1. Open the project folder in VSCode.
@@ -79,7 +83,10 @@ delays-per-exec 0
 ### A. Manually (Command Line)
 1. After building, run:
    ```sh
+   # For Windows
    .\csopesy.exe
+   # For macOS/Linux
+   ./csopesy
    ```
 
 ### B. In Visual Studio Code (Run/Debug Button)
@@ -133,7 +140,7 @@ delays-per-exec 0
     ]
   }
   ```
-- **.vscode/launch.json** (for running/debugging):  
+- **.vscode/launch.json** (for running/debugging):
   (see above)
 
 **Note:**

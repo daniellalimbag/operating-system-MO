@@ -7,14 +7,15 @@
 #include <vector>
 #include <algorithm>
 #include <ctime>
+#ifdef _WIN32
 #include <conio.h>
+#endif
 #include "Header.h"
 #include "Process.h"
 #include "ProcessManager.h"
 #include "Scheduler.h"
 #include "Config.h"
 #include <fstream>
-#include <sstream>
 
 class OpesyConsole {
 private:
@@ -74,9 +75,12 @@ private:
     }
 
 
-    void clearAndDisplayHeader() {
-        system("cls");
-        displayHeader();
+    void clearScreen() {
+        #ifdef _WIN32
+            system("cls");
+        #else
+            system("clear");
+        #endif
     }
 
     void displayProcessInfo(const std::string& sessionName, int pid, bool showDetails = false) {
@@ -84,22 +88,22 @@ private:
         if (!process) return;
 
         std::cout << "Process name: " << sessionName << std::endl;
-        
+
         if (showDetails) {
             std::cout << "ID: " << pid << std::endl;
             std::cout << "Core: " << (process->getCore() == -1 ? "N/A" : std::to_string(process->getCore())) << std::endl;
             std::cout << "CPU Utilization: " << process->getCPUUtilization() << "%" << std::endl;
         }
-        
+
         std::cout << "Logs:" << std::endl << std::endl;
-        
+
         std::string logs = process->getLogs();
         std::cout << (logs.empty() ? "No logs available yet." : logs) << std::endl;
-        
+
         if (process->isComplete()) {
             std::cout << "Finished!" << std::endl;
         } else {
-            std::cout << "Current instruction line: " << process->getCurrentInstructionNumber() 
+            std::cout << "Current instruction line: " << process->getCurrentInstructionNumber()
                      << " / " << process->getTotalInstructions() << std::endl;
         }
         std::cout << std::endl;
@@ -114,11 +118,11 @@ private:
             sessionLoop(processName, pid);
             return true;
         }
-        
+
         if (command.rfind("screen -r ", 0) == 0) {
             std::string processName = command.substr(10);
             auto processes = processManager.getAllProcesses();
-            
+
             for (const auto& process : processes) {
                 if (process->getProcessName() == processName) {
                     sessionLoop(processName, process->getPID());
@@ -128,14 +132,14 @@ private:
             std::cout << "Screen session '" << processName << "' does not exist." << std::endl;
             return true;
         }
-        
+
         return false;
     }
 
     void displayProcessesByStatus(bool showRunning) {
         auto processes = processManager.getAllProcesses();
         std::cout << (showRunning ? "Running" : "Finished") << " processes:" << std::endl;
-        
+
         for (const auto& process : processes) {
             bool isRunning = !process->isComplete();
             int core = process->getCore();
@@ -143,7 +147,7 @@ private:
                 if (showRunning && core == -1) continue; // To be removed? (Only displays processes that have been assigned a core)
                 auto timestamp = process->getTimestamp();
                 std::cout << process->getProcessName() << "\t(" << timestamp << ")\t";
-                
+
                 if (showRunning) {
                     std::cout << "Core: " << std::to_string(core)
                              << "  " << process->getCPUUtilization() << " / 100";
@@ -154,25 +158,6 @@ private:
             }
         }
         std::cout << std::endl;
-    }
-
-public:
-    OpesyConsole() {
-        // Hardcoded: Create 10 processes, each with 100 print commands (To be removed: This is for the week 6 homework)
-        /*for (int i = 1; i <= 10; ++i) {
-            std::string pname = std::string("process") + (i < 10 ? "0" : "") + std::to_string(i);
-            int pid = processManager.createProcess(pname);
-            Process* proc = processManager.getProcess(pid);
-            
-            if (proc) {
-                for (int j = 1; j <= 100; ++j) {
-                    proc->addInstruction("PRINT(\"Hello world from " + pname + "!\")");
-                }
-                proc->addInstruction("EXIT");
-            }
-            scheduler.addProcess(pid);
-        }
-        scheduler.start();*/
     }
 
     void displayHeader() {
@@ -187,8 +172,8 @@ public:
             "initialize", "screen -ls", "scheduler-start", "scheduler-stop", "report-util", "exit", "clear"
         };
 
-        return (command.rfind("screen -s ", 0) == 0 || 
-                command.rfind("screen -r ", 0) == 0 || 
+        return (command.rfind("screen -s ", 0) == 0 ||
+                command.rfind("screen -r ", 0) == 0 ||
                 std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end());
     }
 
@@ -197,7 +182,7 @@ public:
         if (handleScreenCommand(command)) {
             return;
         }
-        
+
         if (command == "screen -ls") {
             displayProcessStatus();
         }
@@ -237,18 +222,19 @@ public:
 
         std::string input;
         while (true) {
-            system("cls");
+            clearScreen();
             displayProcessInfo(sessionName, pid, false);
             std::cout << "root:/> ";
             std::getline(std::cin, input);
 
             if (input == "exit") {
-                clearAndDisplayHeader();
+                clearScreen();
+                displayHeader();
                 return;
             }
 
             if (input == "process-smi") {
-                system("cls");
+                clearScreen();
                 displayProcessInfo(sessionName, pid, true);
                 continue;
             }
@@ -257,7 +243,7 @@ public:
             std::string result = processManager.executeProcessInstruction(pid);
 
             if (process->isComplete()) {
-                system("cls");
+                clearScreen();
                 displayProcessInfo(sessionName, pid, false);
                 std::cout << "Process completed. Press Enter to continue..." << std::endl;
 
@@ -268,7 +254,8 @@ public:
                 // Wait for Enter
                 std::getline(std::cin, input);  // This is better than cin.get() in this case
 
-                clearAndDisplayHeader();
+                clearScreen();
+                displayHeader();
                 return;
             }
         }
@@ -309,7 +296,8 @@ public:
         }
 
         if (command == "clear") {
-            clearAndDisplayHeader();
+            clearScreen();
+            displayHeader();
         } else if (validateCommand(command)) {
             executeCommand(command);
         } else {
@@ -319,7 +307,7 @@ public:
         std::cout << std::endl;
     }
 
-
+public:
     void run() {
         std::string command;
         displayHeader();
