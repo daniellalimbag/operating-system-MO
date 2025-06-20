@@ -8,3 +8,4 @@ config.txt
 .vscode/c_cpp_properties.json
 .vscode/tasks.json
 .git/
+csopesy.dSYM/
