@@ -63,7 +63,6 @@ private:
                 Process* process = processManager.getProcess(pid);
                 if (process && !process->isComplete()) {
                     std::string instr = process->executeNextInstruction();
-                    handleInstruction(process, instr, core);
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 }
                 if (process && process->isComplete()) {
@@ -75,33 +74,6 @@ private:
             }
         }
     }
-
-    void handleInstruction(Process* process, const std::string& instr, int core) {
-        // Handle PRINT command: PRINT("message")
-        if (instr.find("PRINT(") == 0) {
-            size_t start = instr.find('"');
-            size_t end = instr.rfind('"');
-            std::string msg = (start != std::string::npos && end != std::string::npos && end > start)
-                ? instr.substr(start + 1, end - start - 1) : instr;
-            /*logPrint(process, msg, core);*/
-            // Commented out logPrint
-        }
-        // Other instructions can be handled here
-    }
-
-    /*void logPrint(Process* process, const std::string& msg, int core) {
-        std::ofstream ofs(getLogFileName(process), std::ios::app);
-        auto now = std::chrono::system_clock::now();
-        auto now_time_t = std::chrono::system_clock::to_time_t(now);
-        std::tm local_tm;
-        localtime_s(&local_tm, &now_time_t);
-        // Format: (MM/DD/YYYY HH:MM:SS AM/PM) Core: <core> "message"
-        ofs << "(" << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p") << ") Core: " << core << " \"" << msg << "\"" << std::endl;
-    }*/
-
-    /*std::string getLogFileName(Process* process) {
-        return process->getProcessName() + ".txt";
-    }*/
 
 public:
     Scheduler(ProcessManager& pm, SchedulingAlgorithm algo = SchedulingAlgorithm::FCFS)
