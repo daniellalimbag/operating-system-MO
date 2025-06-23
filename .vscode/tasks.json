@@ -4,11 +4,12 @@
         {
             "label": "build csopesy",
             "type": "shell",
-            "command": "C:\\mingw64\\bin\\g++.exe",
+            "command": "g++",
             "args": [
                 "-std=c++20",
                 "-g",
                 "Main.cpp",
+                "Config.cpp",
                 "-o",
                 "csopesy.exe"
             ],
@@ -23,6 +24,7 @@
                     "-std=c++20",
                     "-g",
                     "Main.cpp",
+                    "Config.cpp",
                     "-o",
                     "csopesy"
                 ]
@@ -31,7 +33,7 @@
         {
             "type": "cppbuild",
             "label": "C/C++: g++.exe build active file",
-            "command": "C:\\mingw64\\bin\\g++.exe",
+            "command": "g++",
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
