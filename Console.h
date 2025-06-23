@@ -239,6 +239,17 @@ private:
     }
 
     void displayProcessStatus() const {
+        int totalCores = Scheduler::NUM_CORES;
+        int usedCores = 0;
+        for (int i = 0; i < totalCores; ++i) {
+            if (scheduler.isCoreBusy(i)) ++usedCores;
+        }
+        int availableCores = totalCores - usedCores;
+        int cpuUtil = (totalCores == 0) ? 0 : (usedCores * 100 / totalCores);
+        std::cout << "CPU utilization: " << cpuUtil << "%\n";
+        std::cout << "Cores used: " << usedCores << "\n";
+        std::cout << "Cores available: " << availableCores << "\n";
+        std::cout << std::endl;
         std::cout << "----------------------------------------" << std::endl;
         const_cast<OpesyConsole*>(this)->displayProcessesByStatus(true);  // Running processes
         const_cast<OpesyConsole*>(this)->displayProcessesByStatus(false); // Finished processes

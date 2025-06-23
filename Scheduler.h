@@ -13,8 +13,10 @@ enum class SchedulingAlgorithm {
 };
 
 class Scheduler {
-private:
+public:
     static const int NUM_CORES = 4;
+    bool isCoreBusy(int core) const { return coreBusy[core]; }
+private:
     ProcessManager& processManager;
     std::queue<int> readyQueue; //stores the PIDs of the processes
     std::mutex queueMutex;
