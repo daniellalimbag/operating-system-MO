@@ -29,13 +29,67 @@ private:
 
     void processGenerationLoop() {
         while (generating) {
-            std::string name = "p" + std::string(processCounter < 10 ? "0" : "") + std::to_string(processCounter++);
+            std::ostringstream oss;
+            oss << "p" << std::setw(2) << std::setfill('0') << processCounter++;
+            std::string name = oss.str();
             int pid = processManager.createProcess(name);
             Process* proc = processManager.getProcess(pid);
             if (proc) {
                 int instructionCount = rand() % (config.maxInstructions - config.minInstructions + 1) + config.minInstructions;
-                for (int i = 0; i < instructionCount; ++i) {
-                    proc->addInstruction("PRINT(\"Hello from " + name + " - line " + std::to_string(i + 1) + "\")");
+                std::vector<std::string> declaredVars;
+                int numVars = std::max(1, rand() % 3 + 1); // 1-3 variables
+                // Declare variables
+                for (int v = 0; v < numVars; ++v) {
+                    std::string var = "v" + std::to_string(v+1);
+                    proc->addInstruction("DECLARE " + var);
+                    declaredVars.push_back(var);
+                }
+                int i = 0;
+                while (i < instructionCount) {
+                    int choice = rand() % 6; // 0:ADD, 1:SUB, 2:SLEEP, 3:PRINT, 4:FOR, 5:PRINT default
+                    if (choice == 0 && !declaredVars.empty()) { // ADD
+                        std::string var = declaredVars[rand() % declaredVars.size()];
+                        std::string rhs = (rand() % 2 == 0 && !declaredVars.empty()) ? declaredVars[rand() % declaredVars.size()] : std::to_string(rand() % 100);
+                        proc->addInstruction("ADD " + var + " " + rhs);
+                        ++i;
+                    } else if (choice == 1 && !declaredVars.empty()) { // SUBTRACT
+                        std::string var = declaredVars[rand() % declaredVars.size()];
+                        std::string rhs = (rand() % 2 == 0 && !declaredVars.empty()) ? declaredVars[rand() % declaredVars.size()] : std::to_string(rand() % 100);
+                        proc->addInstruction("SUBTRACT " + var + " " + rhs);
+                        ++i;
+                    } else if (choice == 2) { // SLEEP
+                        int ticks = rand() % 5 + 1;
+                        proc->addInstruction("SLEEP " + std::to_string(ticks));
+                        ++i;
+                    } else if (choice == 3) { // PRINT with message
+                        proc->addInstruction("PRINT(\"Hello from " + name + " - line " + std::to_string(i + 1) + "\")");
+                        ++i;
+                    } else if (choice == 4 && i + 4 < instructionCount && !declaredVars.empty()) { // FOR loop (with at least 2 body instructions)
+                        std::string loopVar = "loop" + std::to_string(rand() % 100);
+                        int start = rand() % 3;
+                        int end = start + rand() % 3 + 1; // 1-3 iterations
+                        proc->addInstruction("FOR " + loopVar + " " + std::to_string(start) + " " + std::to_string(end));
+                        // Add 2-3 body instructions
+                        int bodyCount = 2 + rand() % 2;
+                        for (int b = 0; b < bodyCount; ++b) {
+                            int bodyChoice = rand() % 3;
+                            if (bodyChoice == 0 && !declaredVars.empty()) {
+                                std::string var = declaredVars[rand() % declaredVars.size()];
+                                proc->addInstruction("ADD " + var + " " + std::to_string(rand() % 10));
+                            } else if (bodyChoice == 1 && !declaredVars.empty()) {
+                                std::string var = declaredVars[rand() % declaredVars.size()];
+                                proc->addInstruction("SUBTRACT " + var + " " + std::to_string(rand() % 10));
+                            } else {
+                                proc->addInstruction("PRINT");
+                            }
+                            ++i;
+                        }
+                        proc->addInstruction("END FOR");
+                        i += 2; // FOR + END FOR
+                    } else { // PRINT default
+                        proc->addInstruction("PRINT");
+                        ++i;
+                    }
                 }
                 proc->addInstruction("EXIT");
             }
