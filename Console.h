@@ -202,11 +202,14 @@ private:
                 auto timestamp = process->getTimestamp();
                 std::cout << process->getProcessName() << "\t(" << timestamp << ")\t";
 
+                size_t currentLine = process->getCurrentInstructionNumber();
+                size_t totalLines = process->getTotalInstructions();
+
                 if (showRunning) {
                     std::cout << "Core: " << std::to_string(core)
-                             << "  " << process->getCPUUtilization() << " / 100";
+                             << "  " << currentLine << " / " << totalLines;
                 } else {
-                    std::cout << "Finished 100 / 100";
+                    std::cout << "Finished " << totalLines << " / " << totalLines;
                 }
                 std::cout << std::endl;
             }
