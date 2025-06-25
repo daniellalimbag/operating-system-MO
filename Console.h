@@ -316,7 +316,7 @@ private:
         if (command == "initialize") {
             initialized = readConfigFromFile("config.txt", config);
             if (initialized) {
-                std::cout << "\n System successfully initialized from config.txt:\n";
+                std::cout << "\nSuccessfully initialized from config.txt:\n";
                 std::cout << "num-cpu: " << config.numCPU << '\n';
                 std::cout << "scheduler: " << config.scheduler << '\n';
                 std::cout << "quantum-cycles: " << config.quantumCycles << '\n';
@@ -325,7 +325,7 @@ private:
                 std::cout << "max-ins: " << config.maxInstructions << '\n';
                 std::cout << "delay-per-exec: " << config.delaysPerExec << "\n\n";
             } else {
-                std::cout << "Failed to initialize system from config.txt\n";
+                std::cout << "Failed to initialize from config.txt\n";
             }
             return;
         }
