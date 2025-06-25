@@ -260,6 +260,16 @@ private:
         auto process = processManager.getProcess(pid);
         if (!process) return;
 
+        if (scheduler.isCoreBusy(process->getCore())) {
+            clearScreen();
+            displayProcessInfo(sessionName, pid, true);
+            std::cout << "Press Enter to return to the main menu..." << std::endl;
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            clearScreen();
+            displayHeader();
+            return;
+        }
+
         std::string input;
         while (true) {
             clearScreen();
@@ -279,7 +289,6 @@ private:
                 continue;
             }
 
-            // Execute process instruction
             std::string result = processManager.executeProcessInstruction(pid);
 
             if (process->isComplete()) {
@@ -287,12 +296,8 @@ private:
                 displayProcessInfo(sessionName, pid, false);
                 std::cout << "Process completed. Press Enter to continue..." << std::endl;
 
-                // Flush stdin just in case
                 std::cin.clear();
                 std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-                // Wait for Enter
-                std::getline(std::cin, input);  // This is better than cin.get() in this case
 
                 clearScreen();
                 displayHeader();
@@ -300,6 +305,7 @@ private:
             }
         }
     }
+
 
     void processCommand(const std::string& command) {
         if (command == "exit") {
