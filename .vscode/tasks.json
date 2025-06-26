@@ -10,6 +10,8 @@
                 "-g",
                 "Main.cpp",
                 "Config.cpp",
+                "ProcessInstruction.cpp",
+                "Scheduler.cpp",
                 "-o",
                 "csopesy.exe"
             ],
@@ -25,6 +27,8 @@
                     "-g",
                     "Main.cpp",
                     "Config.cpp",
+                    "ProcessInstruction.cpp",
+                    "Scheduler.cpp",
                     "-o",
                     "csopesy"
                 ]

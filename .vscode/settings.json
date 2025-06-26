@@ -120,6 +120,7 @@
     "thread": "cpp",
     "codecvt": "cpp",
     "ranges": "cpp",
-    "text_encoding": "cpp"
+    "text_encoding": "cpp",
+    "cstring": "cpp"
   }
 }

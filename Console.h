@@ -7,6 +7,9 @@
 #include <vector>
 #include <algorithm>
 #include <ctime>
+#include <thread>
+#include <atomic>
+#include <random>
 #ifdef _WIN32
 #include <conio.h>
 #endif
@@ -15,6 +18,7 @@
 #include "ProcessManager.h"
 #include "Scheduler.h"
 #include "Config.h"
+#include "ProcessInstruction.h"
 #include <fstream>
 
 class OpesyConsole {
@@ -26,79 +30,174 @@ private:
     std::thread processGeneratorThread;
     std::atomic<bool> generating = false;
     int processCounter = 1;
+    std::mt19937 rng{std::random_device{}()};
 
-    void processGenerationLoop() {
-        while (generating) {
+    bool validateCommand(const std::string& command) {
+        static const std::vector<std::string> validCommands = {
+            "initialize", "screen -ls", "scheduler-start", "scheduler-stop", "report-util", "exit", "clear"
+        };
+        return (command.rfind("screen -s ", 0) == 0 ||
+                command.rfind("screen -r ", 0) == 0 ||
+                std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end());
+    }
+
+void processGenerationLoop() {
+    uint64_t lastProcessGenTick = 0;
+    
+    while (generating) {
+        uint64_t currentTick = cpuTickCount.load();
+        
+        // Generate process based on batch frequency (measured in ticks)
+        if (config.batchProcessFreq > 0 && 
+            (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq)) {
+            
+            lastProcessGenTick = currentTick;
+            
             std::ostringstream oss;
             oss << "p" << std::setw(2) << std::setfill('0') << processCounter++;
             std::string name = oss.str();
             int pid = processManager.createProcess(name);
             Process* proc = processManager.getProcess(pid);
             if (proc) {
-                int instructionCount = rand() % (config.maxInstructions - config.minInstructions + 1) + config.minInstructions;
-                std::vector<std::string> declaredVars;
-                int numVars = std::max(1, rand() % 3 + 1); // 1-3 variables
-                // Declare variables
-                for (int v = 0; v < numVars; ++v) {
-                    std::string var = "v" + std::to_string(v+1);
-                    proc->addInstruction("DECLARE " + var);
-                    declaredVars.push_back(var);
-                }
-                int i = 0;
-                while (i < instructionCount) {
-                    int choice = rand() % 6; // 0:ADD, 1:SUB, 2:SLEEP, 3:PRINT, 4:FOR, 5:PRINT default
-                    if (choice == 0 && !declaredVars.empty()) { // ADD
-                        std::string var = declaredVars[rand() % declaredVars.size()];
-                        std::string rhs = (rand() % 2 == 0 && !declaredVars.empty()) ? declaredVars[rand() % declaredVars.size()] : std::to_string(rand() % 100);
-                        proc->addInstruction("ADD " + var + " " + rhs);
-                        ++i;
-                    } else if (choice == 1 && !declaredVars.empty()) { // SUBTRACT
-                        std::string var = declaredVars[rand() % declaredVars.size()];
-                        std::string rhs = (rand() % 2 == 0 && !declaredVars.empty()) ? declaredVars[rand() % declaredVars.size()] : std::to_string(rand() % 100);
-                        proc->addInstruction("SUBTRACT " + var + " " + rhs);
-                        ++i;
-                    } else if (choice == 2) { // SLEEP
-                        int ticks = rand() % 5 + 1;
-                        proc->addInstruction("SLEEP " + std::to_string(ticks));
-                        ++i;
-                    } else if (choice == 3) { // PRINT with message
-                        proc->addInstruction("PRINT(\"Hello from " + name + " - line " + std::to_string(i + 1) + "\")");
-                        ++i;
-                    } else if (choice == 4 && i + 4 < instructionCount && !declaredVars.empty()) { // FOR loop (with at least 2 body instructions)
-                        std::string loopVar = "loop" + std::to_string(rand() % 100);
-                        int start = rand() % 3;
-                        int end = start + rand() % 3 + 1; // 1-3 iterations
-                        proc->addInstruction("FOR " + loopVar + " " + std::to_string(start) + " " + std::to_string(end));
-                        // Add 2-3 body instructions
-                        int bodyCount = 2 + rand() % 2;
-                        for (int b = 0; b < bodyCount; ++b) {
-                            int bodyChoice = rand() % 3;
-                            if (bodyChoice == 0 && !declaredVars.empty()) {
-                                std::string var = declaredVars[rand() % declaredVars.size()];
-                                proc->addInstruction("ADD " + var + " " + std::to_string(rand() % 10));
-                            } else if (bodyChoice == 1 && !declaredVars.empty()) {
-                                std::string var = declaredVars[rand() % declaredVars.size()];
-                                proc->addInstruction("SUBTRACT " + var + " " + std::to_string(rand() % 10));
-                            } else {
-                                proc->addInstruction("PRINT");
-                            }
-                            ++i;
-                        }
-                        proc->addInstruction("END FOR");
-                        i += 2; // FOR + END FOR
-                    } else { // PRINT default
-                        proc->addInstruction("PRINT");
-                        ++i;
-                    }
-                }
-                proc->addInstruction("EXIT");
+                generateRandomInstructions(proc);
             }
             scheduler.addProcess(pid);
-            int delay = config.batchProcessFreq;
-            for (int i = 0; i < delay && generating; ++i) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+
+    void generateRandomInstructions(Process* proc) {
+        int instructionCount = std::uniform_int_distribution<int>(
+            config.minInstructions, config.maxInstructions)(rng);
+        
+        std::vector<std::string> declaredVars;
+        int numVars = std::max(1, std::uniform_int_distribution<int>(1, 3)(rng));
+        
+        // Declare variables first?? Idk if this is right
+        for (int v = 0; v < numVars; ++v) {
+            std::string var = "v" + std::to_string(v + 1);
+            uint16_t initialValue = std::uniform_int_distribution<uint16_t>(0, 100)(rng);
+            proc->addInstruction(std::make_unique<DeclareInstruction>(var, initialValue));
+            proc->setVariableValue(var, initialValue);
+            declaredVars.push_back(var);
+        }
+        
+        // Generate random instructions
+        int i = 0;
+        while (i < instructionCount) {
+            int choice = std::uniform_int_distribution<int>(0, 5)(rng);
+            
+            switch (choice) {
+                case 0: // ADD
+                    if (!declaredVars.empty()) {
+                        generateAddInstruction(proc, declaredVars);
+                        ++i;
+                    } else {
+                        generatePrintInstruction(proc);
+                        ++i;
+                    }
+                    break;
+                    
+                case 1: // SUBTRACT
+                    if (!declaredVars.empty()) {
+                        generateSubtractInstruction(proc, declaredVars);
+                        ++i;
+                    } else {
+                        generatePrintInstruction(proc);
+                        ++i;
+                    }
+                    break;
+                    
+                case 2: // SLEEP
+                    generateSleepInstruction(proc);
+                    ++i;
+                    break;
+                    
+                case 3: // PRINT
+                    generatePrintInstructionWithMessage(proc, proc->getProcessName(), i + 1);
+                    ++i;
+                    break;
+                    
+                case 4: // FOR
+                    if (i + 4 < instructionCount && !declaredVars.empty()) {
+                        int bodyInstructions = generateForLoop(proc, declaredVars, instructionCount - i - 2);
+                        i += bodyInstructions + 2;
+                    } else {
+                        generatePrintInstruction(proc);
+                        ++i;
+                    }
+                    break;
+                    
+                default: 
+                    generatePrintInstruction(proc);
+                    ++i;
+                    break;
             }
         }
+        proc->addInstruction(std::make_unique<PrintInstruction>("Process completed."));
+    }
+
+    void generateAddInstruction(Process* proc, const std::vector<std::string>& vars) {
+        // 3 variables to use
+        std::string var1 = vars.size() > 0 ? vars[0] : "v1";
+        std::string var2 = vars.size() > 1 ? vars[1] : "v2";
+        std::string var3 = vars.size() > 2 ? vars[2] : "v3";
+        proc->addInstruction(std::make_unique<AddInstruction>(var1, var2, var3));
+    }
+
+    void generateSubtractInstruction(Process* proc, const std::vector<std::string>& vars) {
+        std::string var1 = vars.size() > 0 ? vars[0] : "v1";
+        std::string var2 = vars.size() > 1 ? vars[1] : "v2";
+        std::string var3 = vars.size() > 2 ? vars[2] : "v3";
+        proc->addInstruction(std::make_unique<SubtractInstruction>(var1, var2, var3));
+    }
+
+    void generateSleepInstruction(Process* proc) {
+        int ticks = std::uniform_int_distribution<int>(1, 5)(rng);
+        proc->addInstruction(std::make_unique<SleepInstruction>(ticks));
+    }
+
+    void generatePrintInstruction(Process* proc) {
+        proc->addInstruction(std::make_unique<PrintInstruction>("Hello from PRINT instruction"));
+    }
+
+    void generatePrintInstructionWithMessage(Process* proc, const std::string& processName, int lineNum) {
+        std::string message = "Hello from " + processName + " - line " + std::to_string(lineNum);
+        proc->addInstruction(std::make_unique<PrintInstruction>(message));
+    }
+
+    int generateForLoop(Process* proc, const std::vector<std::string>& vars, int maxBodyInstructions) {
+        int bodyCount = std::min(maxBodyInstructions, std::uniform_int_distribution<int>(2, 3)(rng));
+        std::vector<std::unique_ptr<IProcessInstruction>> bodyInstructions;
+        for (int b = 0; b < bodyCount; ++b) {
+            int bodyChoice = std::uniform_int_distribution<int>(0, 2)(rng);
+            switch (bodyChoice) {
+                case 0:
+                    {
+                        std::string var1 = vars.size() > 0 ? vars[0] : "v1";
+                        std::string var2 = vars.size() > 1 ? vars[1] : "v2";
+                        std::string var3 = vars.size() > 2 ? vars[2] : "v3";
+                        bodyInstructions.push_back(std::make_unique<AddInstruction>(var1, var2, var3));
+                    }
+                    break;
+                case 1:
+                    {
+                        std::string var1 = vars.size() > 0 ? vars[0] : "v1";
+                        std::string var2 = vars.size() > 1 ? vars[1] : "v2";
+                        std::string var3 = vars.size() > 2 ? vars[2] : "v3";
+                        bodyInstructions.push_back(std::make_unique<SubtractInstruction>(var1, var2, var3));
+                    }
+                    break;
+                default:
+                    bodyInstructions.push_back(std::make_unique<PrintInstruction>("Hello from PRINT instruction"));
+                    break;
+            }
+        }
+        int repeats = std::uniform_int_distribution<int>(2, 4)(rng);
+        proc->addInstruction(std::make_unique<ForInstruction>(std::move(bodyInstructions), repeats));
+        return 1;
     }
 
     void clearScreen() {
@@ -135,33 +234,6 @@ private:
         std::cout << std::endl;
     }
 
-    bool handleScreenCommand(const std::string& command) {
-        if (command.rfind("screen -s ", 0) == 0) {
-            std::string processName = command.substr(10);
-            int pid = processManager.createProcess(processName);
-            std::cout << "Created screen session '" << processName << "'" << std::endl;
-            scheduler.addProcess(pid);
-            sessionLoop(processName, pid);
-            return true;
-        }
-
-        if (command.rfind("screen -r ", 0) == 0) {
-            std::string processName = command.substr(10);
-            auto processes = processManager.getAllProcesses();
-
-            for (const auto& process : processes) {
-                if (process->getProcessName() == processName) {
-                    sessionLoop(processName, process->getPID());
-                    return true;
-                }
-            }
-            std::cout << "Screen session '" << processName << "' does not exist." << std::endl;
-            return true;
-        }
-
-        return false;
-    }
-
     void displayProcessesByStatus(bool showRunning) {
         auto processes = processManager.getAllProcesses();
         std::cout << (showRunning ? "Running" : "Finished") << " processes:" << std::endl;
@@ -170,7 +242,7 @@ private:
             bool isRunning = !process->isComplete();
             int core = process->getCore();
             if (isRunning == showRunning) {
-                if (showRunning && core == -1) continue; // To be removed? (Only displays processes that have been assigned a core)
+                if (showRunning && core == -1) continue;
                 auto timestamp = process->getTimestamp();
                 std::cout << process->getProcessName() << "\t(" << timestamp << ")\t";
 
@@ -196,22 +268,7 @@ private:
         std::cout << std::endl;
     }
 
-    bool validateCommand(const std::string& command) {
-        static const std::vector<std::string> validCommands = {
-            "initialize", "screen -ls", "scheduler-start", "scheduler-stop", "report-util", "exit", "clear"
-        };
-
-        return (command.rfind("screen -s ", 0) == 0 ||
-                command.rfind("screen -r ", 0) == 0 ||
-                std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end());
-    }
-
     void executeCommand(const std::string& command) {
-
-        if (handleScreenCommand(command)) {
-            return;
-        }
-
         if (command == "screen -ls") {
             displayProcessStatus();
         }
@@ -233,26 +290,86 @@ private:
             scheduler.stop();
             std::cout << "Scheduler and dummy process generation stopped." << std::endl;
         }
+        else if (command == "report-util") {
+            generateUtilizationReport();
+        }
         else {
             std::cout << command << " command recognized. Doing something." << std::endl;
         }
     }
 
+    void generateUtilizationReport() {
+        std::ofstream logFile("csopesy-log.txt");
+        if (!logFile.is_open()) {
+            std::cout << "Error: Could not create csopesy-log.txt" << std::endl;
+            return;
+        }
+
+        // Get current timestamp
+        auto now = std::chrono::system_clock::now();
+        auto now_time_t = std::chrono::system_clock::to_time_t(now);
+        std::tm local_tm;
+        #ifdef _WIN32
+            localtime_s(&local_tm, &now_time_t);
+        #else
+            localtime_r(&now_time_t, &local_tm);
+        #endif
+        
+        logFile << "CPU Utilization Report\n";
+        logFile << "Timestamp: " << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p") << "\n";
+        logFile << "Number of cores: " << config.numCPU << "\n";
+        logFile << "Scheduler: " << config.scheduler << "\n\n";
+
+        int totalCores = config.numCPU;
+        int usedCores = 0;
+        for (int i = 0; i < totalCores; ++i) {
+            if (scheduler.isCoreBusy(i)) ++usedCores;
+        }
+        
+        double utilization = (totalCores == 0) ? 0.0 : (static_cast<double>(usedCores) / totalCores * 100.0);
+        
+        logFile << "CPU Utilization: " << std::fixed << std::setprecision(2) << utilization << "%\n";
+        logFile << "Cores used: " << usedCores << "\n";
+        logFile << "Cores available: " << (totalCores - usedCores) << "\n\n";
+        
+        logFile << "Running processes:\n";
+        auto processes = processManager.getAllProcesses();
+        for (const auto& process : processes) {
+            if (!process->isComplete() && process->getCore() != -1) {
+                logFile << process->getProcessName() << " (Core " << process->getCore() 
+                       << ") - " << process->getCurrentInstructionNumber() 
+                       << "/" << process->getTotalInstructions() << " instructions\n";
+            }
+        }
+        
+        logFile << "\nFinished processes:\n";
+        for (const auto& process : processes) {
+            if (process->isComplete()) {
+                logFile << process->getProcessName() << " - Completed " 
+                       << process->getTotalInstructions() << " instructions\n";
+            }
+        }
+
+        logFile.close();
+        std::cout << "Report generated at csopesy-log.txt" << std::endl;
+    }
+
     void displayProcessStatus() const {
-        int totalCores = Scheduler::NUM_CORES;
+        int totalCores = config.numCPU;
         int usedCores = 0;
         for (int i = 0; i < totalCores; ++i) {
             if (scheduler.isCoreBusy(i)) ++usedCores;
         }
         int availableCores = totalCores - usedCores;
         int cpuUtil = (totalCores == 0) ? 0 : (usedCores * 100 / totalCores);
+        
         std::cout << "CPU utilization: " << cpuUtil << "%\n";
         std::cout << "Cores used: " << usedCores << "\n";
         std::cout << "Cores available: " << availableCores << "\n";
         std::cout << std::endl;
         std::cout << "----------------------------------------" << std::endl;
-        const_cast<OpesyConsole*>(this)->displayProcessesByStatus(true);  // Running processes
-        const_cast<OpesyConsole*>(this)->displayProcessesByStatus(false); // Finished processes
+        const_cast<OpesyConsole*>(this)->displayProcessesByStatus(true);
+        const_cast<OpesyConsole*>(this)->displayProcessesByStatus(false);
         std::cout << "----------------------------------------" << std::endl;
     }
 
@@ -279,21 +396,18 @@ private:
                 continue;
             }
 
-            // Execute process instruction
-            std::string result = processManager.executeProcessInstruction(pid);
+            if (!input.empty()) {
+                process->addInstruction(std::make_unique<PrintInstruction>(input));
+                std::cout << "Added instruction: " << input << std::endl;
+            }
 
             if (process->isComplete()) {
                 clearScreen();
                 displayProcessInfo(sessionName, pid, false);
                 std::cout << "Process completed. Press Enter to continue..." << std::endl;
-
-                // Flush stdin just in case
                 std::cin.clear();
                 std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-
-                // Wait for Enter
-                std::getline(std::cin, input);  // This is better than cin.get() in this case
-
+                std::getline(std::cin, input);
                 clearScreen();
                 displayHeader();
                 return;
@@ -301,7 +415,32 @@ private:
         }
     }
 
+    bool handleScreenCommand(const std::string& command) {
+        if (command.rfind("screen -s ", 0) == 0) {
+            std::string processName = command.substr(10);
+            int pid = processManager.createProcess(processName);
+            std::cout << "Created screen session '" << processName << "'" << std::endl;
+            scheduler.addProcess(pid);
+            sessionLoop(processName, pid);
+            return true;
+        }
+        if (command.rfind("screen -r ", 0) == 0) {
+            std::string processName = command.substr(10);
+            auto processes = processManager.getAllProcesses();
+            for (const auto& process : processes) {
+                if (process->getProcessName() == processName) {
+                    sessionLoop(processName, process->getPID());
+                    return true;
+                }
+            }
+            std::cout << "Screen session '" << processName << "' does not exist." << std::endl;
+            return true;
+        }
+        return false;
+    }
+
     void processCommand(const std::string& command) {
+        if (handleScreenCommand(command)) return;
         if (command == "exit") {
             std::cout << "Exiting CSOPESY CLI..." << std::endl;
             if (generating) {
@@ -309,13 +448,15 @@ private:
                 if (processGeneratorThread.joinable()) {
                     processGeneratorThread.join();
                 }
-            } // if it is still generating processes it should stop on exit
+            }
             exit(0);
         }
 
         if (command == "initialize") {
             initialized = readConfigFromFile("config.txt", config);
             if (initialized) {
+                scheduler.updateConfig(config);
+                
                 std::cout << "\nSuccessfully initialized from config.txt:\n";
                 std::cout << "num-cpu: " << config.numCPU << '\n';
                 std::cout << "scheduler: " << config.scheduler << '\n';
