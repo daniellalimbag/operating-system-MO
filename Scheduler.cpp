@@ -123,7 +123,7 @@ void Scheduler::scheduleFCFS() {
     }
 }
 
-void Scheduler::scheduleRR() { // Might need checking
+void Scheduler::scheduleRR() {
     std::lock_guard<std::mutex> lock(queueMutex);
     
     for (int core = 0; core < numCores; ++core) {
@@ -171,7 +171,7 @@ int Scheduler::calculateCoreUtilization() {
 void Scheduler::schedulerLoop() {
     while (running) {
         std::unique_lock<std::mutex> lock(queueMutex);
-        cv.wait_for(lock, std::chrono::milliseconds(200), [&] { 
+        cv.wait_for(lock, std::chrono::milliseconds(50), [&] { 
             return !readyQueue.empty() || !running; 
         });
         
@@ -190,40 +190,34 @@ void Scheduler::schedulerLoop() {
 }
 
 void Scheduler::workerLoop(int core) {
-    auto lastTickTime = std::chrono::steady_clock::now();
-    const auto tickInterval = std::chrono::milliseconds(100); // 10 ticks per second
-    
     while (running) {
-        auto currentTime = std::chrono::steady_clock::now();
+        cpuTickCount++;
         
-        if (currentTime - lastTickTime >= tickInterval) {
-            if (core == 0) {
-                cpuTickCount++;
-            }
-            lastTickTime = currentTime;
-            
-            if (coreBusy[core]->load()) {
-                int pid = coreProcess[core]->load();
-                Process* process = processManager.getProcess(pid);
-                if (process && !process->isComplete()) {
-                    std::string result = process->executeNextInstruction();
-                    
-                    if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
-                        int remaining = coreQuantumRemaining[core]->load();
-                        if (remaining > 0) {
-                            coreQuantumRemaining[core]->store(remaining - 1);
-                        }
-                    }
+        if (coreBusy[core]->load()) {
+            int pid = coreProcess[core]->load();
+            Process* process = processManager.getProcess(pid);
+            if (process && !process->isComplete()) {
+                std::string result = process->executeNextInstruction();
+                
+                if (delayPerExec > 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delayPerExec));
                 }
                 
-                if (process && process->isComplete()) {
-                    coreBusy[core]->store(false);
-                    coreProcess[core]->store(-1);
-                    coreQuantumRemaining[core]->store(0);
+                if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
+                    int remaining = coreQuantumRemaining[core]->load();
+                    if (remaining > 0) {
+                        coreQuantumRemaining[core]->store(remaining - 1);
+                    }
                 }
             }
-        } else {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            
+            if (process && process->isComplete()) {
+                coreBusy[core]->store(false);
+                coreProcess[core]->store(-1);
+                coreQuantumRemaining[core]->store(0);
+            }
         }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }

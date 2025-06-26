@@ -47,9 +47,9 @@ void processGenerationLoop() {
     while (generating) {
         uint64_t currentTick = cpuTickCount.load();
         
-        // Generate process based on batch frequency (measured in ticks)
+        // Generate process based on batch frequency
         if (config.batchProcessFreq > 0 && 
-            (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq)) {
+            (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq * 10)) { //multiplied by 10 for now
             
             lastProcessGenTick = currentTick;
             
@@ -64,7 +64,7 @@ void processGenerationLoop() {
             scheduler.addProcess(pid);
         }
         
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
 
@@ -273,22 +273,26 @@ void processGenerationLoop() {
             displayProcessStatus();
         }
         else if (command == "scheduler-start") {
-            scheduler.start();
+            // Only start process generation, scheduler should already be running
             if (!generating) {
                 generating = true;
                 processGeneratorThread = std::thread(&OpesyConsole::processGenerationLoop, this);
+                std::cout << "Dummy process generation started." << std::endl;
+            } else {
+                std::cout << "Dummy process generation is already running." << std::endl;
             }
-            std::cout << "Scheduler started. Dummy process generation initiated." << std::endl;
         }
         else if (command == "scheduler-stop") {
+            // Only stop process generation, keep scheduler running
             if (generating) {
                 generating = false;
                 if (processGeneratorThread.joinable()) {
                     processGeneratorThread.join();
                 }
+                std::cout << "Dummy process generation stopped." << std::endl;
+            } else {
+                std::cout << "Dummy process generation is not running." << std::endl;
             }
-            scheduler.stop();
-            std::cout << "Scheduler and dummy process generation stopped." << std::endl;
         }
         else if (command == "report-util") {
             generateUtilizationReport();
@@ -449,6 +453,8 @@ void processGenerationLoop() {
                     processGeneratorThread.join();
                 }
             }
+            // Stop the scheduler when exiting
+            scheduler.stop();
             exit(0);
         }
 
@@ -456,6 +462,8 @@ void processGenerationLoop() {
             initialized = readConfigFromFile("config.txt", config);
             if (initialized) {
                 scheduler.updateConfig(config);
+                // Start the scheduler automatically after initialization
+                scheduler.start();
                 
                 std::cout << "\nSuccessfully initialized from config.txt:\n";
                 std::cout << "num-cpu: " << config.numCPU << '\n';
@@ -464,7 +472,8 @@ void processGenerationLoop() {
                 std::cout << "batch-process-freq: " << config.batchProcessFreq << '\n';
                 std::cout << "min-ins: " << config.minInstructions << '\n';
                 std::cout << "max-ins: " << config.maxInstructions << '\n';
-                std::cout << "delay-per-exec: " << config.delaysPerExec << "\n\n";
+                std::cout << "delay-per-exec: " << config.delaysPerExec << "\n";
+                std::cout << "Scheduler started automatically.\n\n";
             } else {
                 std::cout << "Failed to initialize from config.txt\n";
             }
