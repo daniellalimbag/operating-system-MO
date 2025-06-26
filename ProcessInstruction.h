@@ -58,6 +58,8 @@ public:
         : instructions(std::move(instrs)), repeats(reps) {}
     void execute(class Process& process) override;
     InstructionType getType() const override { return InstructionType::FOR; }
+    const std::vector<std::unique_ptr<IProcessInstruction>>& getBody() const { return instructions; }
+    int getRepeatCount() const { return repeats; }
 };
 
 // PRINT instruction

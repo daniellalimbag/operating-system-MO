@@ -38,6 +38,7 @@ private:
     std::vector<std::pair<std::string, std::string>> logs;
     int sleepTicks = 0;
     std::stack<ForLoopState> forStack;
+
     
 public:
     // Helper method
@@ -215,4 +216,24 @@ public:
     // Setters
     void setCore(int core) { core_assigned = core; }
     void setCPUUtilization(int util) { cpu_utilization = util; }
+
+    size_t countEffectiveInstructions() const {
+        size_t total = 0;
+        for (const auto& instr : instructionList) {
+            total += countExpanded(instr.get());
+        }
+        return total;
+    }
+
+    size_t countExpanded(const IProcessInstruction* instr) const {
+        if (instr->getType() == InstructionType::FOR) {
+            const ForInstruction* forInstr = static_cast<const ForInstruction*>(instr);
+            size_t bodyCount = 0;
+            for (const auto& nested : forInstr->getBody()) {
+                bodyCount += countExpanded(nested.get());
+            }
+            return bodyCount * forInstr->getRepeatCount();
+        }
+        return 1;
+    }
 };

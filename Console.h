@@ -229,7 +229,7 @@ void processGenerationLoop() {
             std::cout << "Finished!" << std::endl;
         } else {
             std::cout << "Current instruction line: " << process->getCurrentInstructionNumber()
-                     << " / " << process->getTotalInstructions() << std::endl;
+                     << " / " << process->countEffectiveInstructions() << std::endl;
         }
         std::cout << std::endl;
     }
@@ -247,7 +247,7 @@ void processGenerationLoop() {
                 std::cout << process->getProcessName() << "\t(" << timestamp << ")\t";
 
                 size_t currentLine = process->getCurrentInstructionNumber();
-                size_t totalLines = process->getTotalInstructions();
+                size_t totalLines = process->countEffectiveInstructions();
 
                 if (showRunning) {
                     std::cout << "Core: " << std::to_string(core)
@@ -342,7 +342,7 @@ void processGenerationLoop() {
             if (!process->isComplete() && process->getCore() != -1) {
                 logFile << process->getProcessName() << " (Core " << process->getCore() 
                        << ") - " << process->getCurrentInstructionNumber() 
-                       << "/" << process->getTotalInstructions() << " instructions\n";
+                       << "/" << process->countEffectiveInstructions() << " instructions\n";
             }
         }
         
@@ -350,7 +350,7 @@ void processGenerationLoop() {
         for (const auto& process : processes) {
             if (process->isComplete()) {
                 logFile << process->getProcessName() << " - Completed " 
-                       << process->getTotalInstructions() << " instructions\n";
+                       << process->countEffectiveInstructions() << " instructions\n";
             }
         }
 
