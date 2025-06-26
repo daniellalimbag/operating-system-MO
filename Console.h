@@ -423,6 +423,11 @@ void processGenerationLoop() {
         if (command.rfind("screen -s ", 0) == 0) {
             std::string processName = command.substr(10);
             int pid = processManager.createProcess(processName);
+            Process* proc = processManager.getProcess(pid);
+            if (proc) {
+                generateRandomInstructions(proc);
+            }
+            
             std::cout << "Created screen session '" << processName << "'" << std::endl;
             scheduler.addProcess(pid);
             sessionLoop(processName, pid);
