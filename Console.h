@@ -471,7 +471,6 @@ void generateRandomInstructions(Process* proc) {
                 std::cout << "min-ins: " << config.minInstructions << '\n';
                 std::cout << "max-ins: " << config.maxInstructions << '\n';
                 std::cout << "delay-per-exec: " << config.delaysPerExec << "\n";
-                std::cout << "Scheduler started automatically.\n\n";
             } else {
                 std::cout << "Failed to initialize from config.txt\n";
             }
