@@ -244,9 +244,9 @@ private:
         std::cout << std::endl;
     }
 
-    void displayProcessesByStatus(bool showRunning) {
+    void outputProcessesByStatus(std::ostream& out, bool showRunning) const {
         auto processes = processManager.getAllProcesses();
-        std::cout << (showRunning ? "Running" : "Finished") << " processes:" << std::endl;
+        out << (showRunning ? "Running" : "Finished") << " processes:" << std::endl;
 
         for (const auto& process : processes) {
             bool isRunning = !process->isComplete();
@@ -254,21 +254,25 @@ private:
             if (isRunning == showRunning) {
                 if (showRunning && core == -1) continue;
                 auto timestamp = process->getTimestamp();
-                std::cout << process->getProcessName() << "\t(" << timestamp << ")\t";
+                out << process->getProcessName() << "\t(" << timestamp << ")\t";
 
                 size_t currentLine = process->getCurrentInstructionNumber();
                 size_t totalLines = process->countEffectiveInstructions();
 
                 if (showRunning) {
-                    std::cout << "Core: " << std::to_string(core)
-                             << "  " << currentLine << " / " << totalLines;
+                    out << "Core: " << std::to_string(core)
+                        << "  " << currentLine << " / " << totalLines;
                 } else {
-                    std::cout << "Finished " << totalLines << " / " << totalLines;
+                    out << "Finished " << totalLines << " / " << totalLines;
                 }
-                std::cout << std::endl;
+                out << std::endl;
             }
         }
-        std::cout << std::endl;
+        out << std::endl;
+    }
+
+    void displayProcessesByStatus(bool showRunning) const {
+        outputProcessesByStatus(std::cout, showRunning);
     }
 
     void displayHeader() {
@@ -333,50 +337,22 @@ private:
             return;
         }
 
-        // Get current timestamp
-        auto now = std::chrono::system_clock::now();
-        auto now_time_t = std::chrono::system_clock::to_time_t(now);
-        std::tm local_tm;
-        #ifdef _WIN32
-            localtime_s(&local_tm, &now_time_t);
-        #else
-            localtime_r(&now_time_t, &local_tm);
-        #endif
-        
-        logFile << "CPU Utilization Report\n";
-        logFile << "Timestamp: " << std::put_time(&local_tm, "%m/%d/%Y %I:%M:%S %p") << "\n";
-        logFile << "Number of cores: " << config.numCPU << "\n";
-        logFile << "Scheduler: " << config.scheduler << "\n\n";
-
         int totalCores = config.numCPU;
         int usedCores = 0;
         for (int i = 0; i < totalCores; ++i) {
             if (scheduler.isCoreBusy(i)) ++usedCores;
         }
-        
-        double utilization = (totalCores == 0) ? 0.0 : (static_cast<double>(usedCores) / totalCores * 100.0);
-        
-        logFile << "CPU Utilization: " << std::fixed << std::setprecision(2) << utilization << "%\n";
+        int availableCores = totalCores - usedCores;
+        int cpuUtil = (totalCores == 0) ? 0 : (usedCores * 100 / totalCores);
+
+        logFile << "CPU utilization: " << cpuUtil << "%\n";
         logFile << "Cores used: " << usedCores << "\n";
-        logFile << "Cores available: " << (totalCores - usedCores) << "\n\n";
-        
-        logFile << "Running processes:\n";
-        auto processes = processManager.getAllProcesses();
-        for (const auto& process : processes) {
-            if (!process->isComplete() && process->getCore() != -1) {
-                logFile << process->getProcessName() << " (Core " << process->getCore() 
-                       << ") - " << process->getCurrentInstructionNumber() 
-                       << "/" << process->countEffectiveInstructions() << " instructions\n";
-            }
-        }
-        
-        logFile << "\nFinished processes:\n";
-        for (const auto& process : processes) {
-            if (process->isComplete()) {
-                logFile << process->getProcessName() << " - Completed " 
-                       << process->countEffectiveInstructions() << " instructions\n";
-            }
-        }
+        logFile << "Cores available: " << availableCores << "\n";
+        logFile << std::endl;
+        logFile << "----------------------------------------" << std::endl;
+        outputProcessesByStatus(logFile, true);
+        outputProcessesByStatus(logFile, false);
+        logFile << "----------------------------------------" << std::endl;
 
         logFile.close();
         std::cout << "Report generated at csopesy-log.txt" << std::endl;
@@ -491,7 +467,7 @@ private:
                 std::cout << "batch-process-freq: " << config.batchProcessFreq << '\n';
                 std::cout << "min-ins: " << config.minInstructions << '\n';
                 std::cout << "max-ins: " << config.maxInstructions << '\n';
-                std::cout << "delay-per-exec: " << config.delaysPerExec << "\n";
+                std::cout << "delay-per-exec: " << config.delaysPerExec << "\n\n";
             } else {
                 std::cout << "Failed to initialize from config.txt\n";
             }

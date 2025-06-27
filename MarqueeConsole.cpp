@@ -33,8 +33,8 @@ void MarqueeConsole::getConsoleSize(int& width, int& height) {
     width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
     height = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
     #else
-    // For Linux/Mac, you'd need to implement terminal size detection
-    width = 80;  // Default fallback
+    // no terminal size detection for Linux and Mac
+    width = 80;
     height = 24;
     #endif
 }
@@ -55,8 +55,6 @@ void MarqueeConsole::clearScreen() {
 }
 
 void MarqueeConsole::displayMainHeader() {
-    // This should call the main console's displayHeader function
-    // For now, we'll just clear and show a simple message
     clearScreen();
     std::cout << "Returned to main console.\n";
 }
