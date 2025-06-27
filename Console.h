@@ -10,8 +10,11 @@
 #include <thread>
 #include <atomic>
 #include <random>
+#include <mutex>
+#include <chrono>
 #ifdef _WIN32
 #include <conio.h>
+#include <windows.h>
 #endif
 #include "Header.h"
 #include "Process.h"
@@ -19,6 +22,7 @@
 #include "Scheduler.h"
 #include "Config.h"
 #include "ProcessInstruction.h"
+#include "MarqueeConsole.h"
 #include <fstream>
 
 class OpesyConsole {
@@ -31,43 +35,46 @@ private:
     std::atomic<bool> generating = false;
     int processCounter = 1;
     std::mt19937 rng{std::random_device{}()};
+    std::unique_ptr<MarqueeConsole> marqueeConsole;
 
     bool validateCommand(const std::string& command) {
         static const std::vector<std::string> validCommands = {
-            "initialize", "screen -ls", "scheduler-start", "scheduler-stop", "report-util", "exit", "clear"
+            "initialize", "screen -ls", "scheduler-start", "scheduler-stop", 
+            "report-util", "exit", "clear", "marquee"
         };
         return (command.rfind("screen -s ", 0) == 0 ||
                 command.rfind("screen -r ", 0) == 0 ||
                 std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end());
     }
 
-void processGenerationLoop() {
-    uint64_t lastProcessGenTick = 0;
-    
-    while (generating) {
-        uint64_t currentTick = cpuTickCount.load();
+    void processGenerationLoop() {
+        uint64_t lastProcessGenTick = 0;
         
-        // Generate process based on batch frequency
-        if (config.batchProcessFreq > 0 && 
-            (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq * 10)) { //multiplied by 10 for now
+        while (generating) {
+            uint64_t currentTick = cpuTickCount.load();
             
-            lastProcessGenTick = currentTick;
-            
-            std::ostringstream oss;
-            oss << "p" << std::setw(2) << std::setfill('0') << processCounter++;
-            std::string name = oss.str();
-            int pid = processManager.createProcess(name);
-            Process* proc = processManager.getProcess(pid);
-            if (proc) {
-                generateRandomInstructions(proc);
+            // Generate process based on batch frequency
+            if (config.batchProcessFreq > 0 && 
+                (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq * 10)) { //multiplied by 10 for now
+                
+                lastProcessGenTick = currentTick;
+                
+                std::ostringstream oss;
+                oss << "p" << std::setw(2) << std::setfill('0') << processCounter++;
+                std::string name = oss.str();
+                int pid = processManager.createProcess(name);
+                Process* proc = processManager.getProcess(pid);
+                if (proc) {
+                    generateRandomInstructions(proc);
+                }
+                scheduler.addProcess(pid);
             }
-            scheduler.addProcess(pid);
+            
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
         }
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-}
-void generateRandomInstructions(Process* proc) {
+
+    void generateRandomInstructions(Process* proc) {
         int instructionCount = std::uniform_int_distribution<int>(
             config.minInstructions, config.maxInstructions)(rng);
         
@@ -158,13 +165,11 @@ void generateRandomInstructions(Process* proc) {
     }
 
     void generatePrintInstruction(Process* proc) {
-        // Follow specification: "Hello world from <process_name>!"
         std::string message = "Hello world from " + proc->getProcessName() + "!";
         proc->addInstruction(std::make_unique<PrintInstruction>(message));
     }
 
     void generatePrintInstructionWithMessage(Process* proc, const std::string& processName, int lineNum) {
-        // For custom messages, still follow the general format but include line info
         std::string message = "Hello world from " + processName + "!";
         proc->addInstruction(std::make_unique<PrintInstruction>(message));
     }
@@ -192,7 +197,6 @@ void generateRandomInstructions(Process* proc) {
                     }
                     break;
                 default:
-                    // Use the proper default format for PRINT instructions
                     {
                         std::string message = "Hello world from " + proc->getProcessName() + "!";
                         bodyInstructions.push_back(std::make_unique<PrintInstruction>(message));
@@ -204,6 +208,7 @@ void generateRandomInstructions(Process* proc) {
         proc->addInstruction(std::make_unique<ForInstruction>(std::move(bodyInstructions), repeats));
         return 1;
     }
+
     void clearScreen() {
         #ifdef _WIN32
             system("cls");
@@ -300,9 +305,25 @@ void generateRandomInstructions(Process* proc) {
         else if (command == "report-util") {
             generateUtilizationReport();
         }
+        else if (command == "marquee") {
+            runMarqueeConsole();
+        }
         else {
             std::cout << command << " command recognized. Doing something." << std::endl;
         }
+    }
+
+    void runMarqueeConsole() {
+        if (!marqueeConsole) {
+            marqueeConsole = std::make_unique<MarqueeConsole>();
+            
+            marqueeConsole->setExitCallback([this]() {
+                clearScreen();
+                displayHeader();
+            });
+        }
+        
+        marqueeConsole->run();
     }
 
     void generateUtilizationReport() {
@@ -381,38 +402,38 @@ void generateRandomInstructions(Process* proc) {
     }
 
     void sessionLoop(const std::string& sessionName, int pid) {
-    auto process = processManager.getProcess(pid);
-    if (!process) return;
-    std::string input;
-    clearScreen();
-    while (true) {
-        displayProcessInfo(sessionName, pid, false);
-        std::cout << "root:/> ";
-        std::getline(std::cin, input);
-
-        if (input == "exit") {
-            clearScreen();
-            displayHeader();
-            return;
-        }
-
-        if (input == "process-smi") {
-            displayProcessInfo(sessionName, pid, true);
-            continue;
-        }
-        if (!input.empty()) {
-            std::cout << "Invalid command." << std::endl;
-        }
-
-        if (process->isComplete()) {
-            clearScreen();
+        auto process = processManager.getProcess(pid);
+        if (!process) return;
+        std::string input;
+        clearScreen();
+        while (true) {
             displayProcessInfo(sessionName, pid, false);
-            std::cout << "Process completed." << std::endl;
-            std::cin.clear();
-            continue;
+            std::cout << "root:/> ";
+            std::getline(std::cin, input);
+
+            if (input == "exit") {
+                clearScreen();
+                displayHeader();
+                return;
+            }
+
+            if (input == "process-smi") {
+                displayProcessInfo(sessionName, pid, true);
+                continue;
+            }
+            if (!input.empty()) {
+                std::cout << "Invalid command." << std::endl;
+            }
+
+            if (process->isComplete()) {
+                clearScreen();
+                displayProcessInfo(sessionName, pid, false);
+                std::cout << "Process completed." << std::endl;
+                std::cin.clear();
+                continue;
+            }
         }
     }
-}
 
     bool handleScreenCommand(const std::string& command) {
         if (command.rfind("screen -s ", 0) == 0) {
