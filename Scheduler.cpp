@@ -127,17 +127,29 @@ void Scheduler::scheduleRR() {
     std::lock_guard<std::mutex> lock(queueMutex);
     
     for (int core = 0; core < numCores; ++core) {
-        if (coreBusy[core]->load() && coreQuantumRemaining[core]->load() <= 0) {
+        if (coreBusy[core]->load()) {
             int currentPid = coreProcess[core]->load();
             Process* currentProcess = processManager.getProcess(currentPid);
             
-            if (currentProcess && !currentProcess->isComplete()) {
+            bool shouldPreempt = false;
+            
+            if (!currentProcess || currentProcess->isComplete()) {
+                shouldPreempt = true;
+                if (currentProcess) {
+                    processManager.assignProcessToCore(currentPid, -1);
+                }
+            }
+            else if (coreQuantumRemaining[core]->load() <= 0) {
+                shouldPreempt = true;
                 readyQueue.push(currentPid);
+                processManager.assignProcessToCore(currentPid, -1);
             }
             
-            coreBusy[core]->store(false);
-            coreProcess[core]->store(-1);
-            coreQuantumRemaining[core]->store(0);
+            if (shouldPreempt) {
+                coreBusy[core]->store(false);
+                coreProcess[core]->store(-1);
+                coreQuantumRemaining[core]->store(0);
+            }
         }
     }
     
@@ -145,15 +157,22 @@ void Scheduler::scheduleRR() {
         if (!coreBusy[core]->load() && !readyQueue.empty()) {
             int pid = readyQueue.front();
             readyQueue.pop();
-            assignProcessToCore(pid, core);
-            coreQuantumRemaining[core]->store(quantumCycles);
+            
+            Process* process = processManager.getProcess(pid);
+            if (process && !process->isComplete()) {
+                assignProcessToCore(pid, core);
+                coreQuantumRemaining[core]->store(quantumCycles);
+            }
         }
     }
 }
 
 void Scheduler::assignProcessToCore(int pid, int core) {
-    coreBusy[core]->store(true);
+    if (core < 0 || core >= numCores || coreBusy[core]->load()) {
+        return;
+    }
     coreProcess[core]->store(pid);
+    coreBusy[core]->store(true);
     processManager.assignProcessToCore(pid, core);
     
     int utilization = calculateCoreUtilization();
@@ -170,13 +189,8 @@ int Scheduler::calculateCoreUtilization() {
 
 void Scheduler::schedulerLoop() {
     while (running) {
-        std::unique_lock<std::mutex> lock(queueMutex);
-        cv.wait_for(lock, std::chrono::milliseconds(50), [&] { 
-            return !readyQueue.empty() || !running; 
-        });
-        
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if (!running) break;
-        lock.unlock();
         
         switch (algorithm) {
             case SchedulingAlgorithm::FCFS:
@@ -196,28 +210,23 @@ void Scheduler::workerLoop(int core) {
         if (coreBusy[core]->load()) {
             int pid = coreProcess[core]->load();
             Process* process = processManager.getProcess(pid);
+            
             if (process && !process->isComplete()) {
-                std::string result = process->executeNextInstruction();
-                
-                if (delayPerExec > 0) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(delayPerExec));
-                }
-                
                 if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
                     int remaining = coreQuantumRemaining[core]->load();
                     if (remaining > 0) {
                         coreQuantumRemaining[core]->store(remaining - 1);
                     }
                 }
-            }
-            
-            if (process && process->isComplete()) {
-                coreBusy[core]->store(false);
-                coreProcess[core]->store(-1);
-                coreQuantumRemaining[core]->store(0);
+                
+                std::string result = process->executeNextInstruction();
+                
+                if (delayPerExec > 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delayPerExec));
+                }
             }
         }
         
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
