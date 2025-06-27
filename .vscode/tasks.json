@@ -12,6 +12,7 @@
                 "Config.cpp",
                 "ProcessInstruction.cpp",
                 "Scheduler.cpp",
+                "MarqueeConsole.cpp",
                 "-o",
                 "csopesy.exe"
             ],
@@ -29,6 +30,7 @@
                     "Config.cpp",
                     "ProcessInstruction.cpp",
                     "Scheduler.cpp",
+                    "MarqueeConsole.cpp",
                     "-o",
                     "csopesy"
                 ]
