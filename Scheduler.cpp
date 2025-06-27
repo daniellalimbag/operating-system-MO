@@ -6,6 +6,31 @@
 // Global CPU tick counter
 std::atomic<uint64_t> cpuTickCount{0};
 
+// Waiting queue
+void Scheduler::addToWaitingQueue(int pid, int sleepTicks) {
+    std::lock_guard<std::mutex> lock(queueMutex);
+    waitingQueue.push_back({pid, sleepTicks});
+}
+
+void Scheduler::checkWaitingQueue() {
+    std::lock_guard<std::mutex> lock(queueMutex);
+    for (auto it = waitingQueue.begin(); it != waitingQueue.end(); ) {
+        int pid = it->first;
+        int& ticks = it->second;
+        Process* process = processManager.getProcess(pid);
+        if (process && process->getSleepTicks() > 0) {
+            process->setSleepTicks(process->getSleepTicks() - 1);
+            ticks = process->getSleepTicks();
+        }
+        if (!process || process->getSleepTicks() <= 0) {
+            readyQueue.push(pid);
+            it = waitingQueue.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 Scheduler::Scheduler(ProcessManager& pm)
     : processManager(pm), running(false), algorithm(SchedulingAlgorithm::FCFS),
       numCores(4), quantumCycles(1), delayPerExec(0) {
@@ -191,6 +216,7 @@ void Scheduler::schedulerLoop() {
     while (running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if (!running) break;
+        checkWaitingQueue();
         
         switch (algorithm) {
             case SchedulingAlgorithm::FCFS:
@@ -220,6 +246,18 @@ void Scheduler::workerLoop(int core) {
                         }
                     }
 
+                    if (process->getSleepTicks() > 0) {
+                        {
+                            std::lock_guard<std::mutex> lock(queueMutex);
+                            waitingQueue.push_back({pid, process->getSleepTicks()});
+                        }
+                        processManager.assignProcessToCore(pid, -1);
+                        coreBusy[core]->store(false);
+                        coreProcess[core]->store(-1);
+                        coreQuantumRemaining[core]->store(0);
+                        continue;
+                    }
+
                     std::string result = process->executeNextInstruction();
 
                     if (delayPerExec > 0) {
@@ -233,6 +271,7 @@ void Scheduler::workerLoop(int core) {
                 }
             }
         }
+        checkWaitingQueue();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

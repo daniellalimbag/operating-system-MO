@@ -39,8 +39,9 @@ private:
     int sleepTicks = 0;
     std::stack<ForLoopState> forStack;
 
-    
 public:
+    int getSleepTicks() const { return sleepTicks; }
+
     // Helper method
     uint16_t clampUint16(int value) {
         if (value < 0) return 0;

@@ -34,6 +34,8 @@ private:
     SchedulingAlgorithm algorithm;
     SystemConfig config;
     int numCores;
+    std::vector<std::pair<int, int>> waitingQueue;
+
     int quantumCycles;
     int delayPerExec;
 
@@ -61,4 +63,6 @@ public:
     int getCoreQuantumRemaining(int core) const;
     size_t getReadyQueueSize();
     uint64_t getCurrentTick() const { return cpuTickCount.load(); }
+    void checkWaitingQueue();
+    void addToWaitingQueue(int pid, int sleepTicks);
 };
