@@ -141,8 +141,8 @@ void Scheduler::scheduleRR() {
             }
             else if (coreQuantumRemaining[core]->load() <= 0) {
                 shouldPreempt = true;
-                readyQueue.push(currentPid);
                 processManager.assignProcessToCore(currentPid, -1);
+                readyQueue.push(currentPid);
             }
             
             if (shouldPreempt) {
