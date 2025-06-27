@@ -10,3 +10,5 @@ struct SystemConfig {
     int maxInstructions = 1;
     int delaysPerExec = 0;
 };
+
+bool readConfigFromFile(const std::string& filename, SystemConfig& config);
