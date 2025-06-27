@@ -206,27 +206,34 @@ void Scheduler::schedulerLoop() {
 void Scheduler::workerLoop(int core) {
     while (running) {
         cpuTickCount++;
-        
+
         if (coreBusy[core]->load()) {
             int pid = coreProcess[core]->load();
             Process* process = processManager.getProcess(pid);
-            
-            if (process && !process->isComplete()) {
-                if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
-                    int remaining = coreQuantumRemaining[core]->load();
-                    if (remaining > 0) {
-                        coreQuantumRemaining[core]->store(remaining - 1);
+
+            if (process) {
+                if (!process->isComplete()) {
+                    if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
+                        int remaining = coreQuantumRemaining[core]->load();
+                        if (remaining > 0) {
+                            coreQuantumRemaining[core]->store(remaining - 1);
+                        }
                     }
-                }
-                
-                std::string result = process->executeNextInstruction();
-                
-                if (delayPerExec > 0) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(delayPerExec));
+
+                    std::string result = process->executeNextInstruction();
+
+                    if (delayPerExec > 0) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(delayPerExec));
+                    }
+                } else {
+                    processManager.assignProcessToCore(pid, -1);
+                    coreBusy[core]->store(false);
+                    coreProcess[core]->store(-1);
+                    coreQuantumRemaining[core]->store(0);
                 }
             }
         }
-        
+
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }

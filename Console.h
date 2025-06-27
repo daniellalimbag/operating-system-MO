@@ -14,6 +14,10 @@
 #include <chrono>
 #ifdef _WIN32
 #include <conio.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <algorithm>
 #include <windows.h>
 #endif
 #include "Header.h"
@@ -77,70 +81,101 @@ private:
     void generateRandomInstructions(Process* proc) {
         int instructionCount = std::uniform_int_distribution<int>(
             config.minInstructions, config.maxInstructions)(rng);
-        
+
         std::vector<std::string> declaredVars;
+        std::vector<std::pair<std::function<void()>, std::string>> instructionLogPairs;
+
+        // Prepare DECLARE instructions
         int numVars = std::max(1, std::uniform_int_distribution<int>(1, 3)(rng));
-        
-        // Declare variables first
         for (int v = 0; v < numVars; ++v) {
             std::string var = "v" + std::to_string(v + 1);
-            uint16_t initialValue = std::uniform_int_distribution<uint16_t>(0, 100)(rng);
-            proc->addInstruction(std::make_unique<DeclareInstruction>(var, initialValue));
-            proc->setVariableValue(var, initialValue);
+            uint16_t value = std::uniform_int_distribution<uint16_t>(0, 100)(rng);
             declaredVars.push_back(var);
+
+            instructionLogPairs.push_back({
+                [=]() {
+                    proc->addInstruction(std::make_unique<DeclareInstruction>(var, value));
+                    proc->setVariableValue(var, value);
+                },
+                "[DEBUG] DECLARE(" + var + ", " + std::to_string(value) + ")"
+            });
         }
-        
-        // Generate random instructions
+
+        // Other instructions
         int i = 0;
         while (i < instructionCount) {
             int choice = std::uniform_int_distribution<int>(0, 5)(rng);
-            
             switch (choice) {
                 case 0: // ADD
                     if (!declaredVars.empty()) {
-                        generateAddInstruction(proc, declaredVars);
-                        ++i;
-                    } else {
-                        generatePrintInstruction(proc);
+                        instructionLogPairs.push_back({
+                            [=]() { generateAddInstruction(proc, declaredVars); },
+                            "[DEBUG] ADD(...)"
+                        });
                         ++i;
                     }
                     break;
-                    
+
                 case 1: // SUBTRACT
                     if (!declaredVars.empty()) {
-                        generateSubtractInstruction(proc, declaredVars);
-                        ++i;
-                    } else {
-                        generatePrintInstruction(proc);
+                        instructionLogPairs.push_back({
+                            [=]() { generateSubtractInstruction(proc, declaredVars); },
+                            "[DEBUG] SUBTRACT(...)"
+                        });
                         ++i;
                     }
                     break;
-                    
+
                 case 2: // SLEEP
-                    generateSleepInstruction(proc);
+                    instructionLogPairs.push_back({
+                        [=]() { generateSleepInstruction(proc); },
+                        "[DEBUG] SLEEP(...)"
+                    });
                     ++i;
                     break;
-                    
+
                 case 3: // PRINT
-                    generatePrintInstruction(proc);
+                    instructionLogPairs.push_back({
+                        [=]() { generatePrintInstruction(proc); },
+                        "[DEBUG] PRINT(...)"
+                    });
                     ++i;
                     break;
-                    
+
                 case 4: // FOR
                     if (i + 4 < instructionCount && !declaredVars.empty()) {
-                        int bodyInstructions = generateForLoop(proc, declaredVars, instructionCount - i - 2);
-                        i += bodyInstructions + 2;
+                        int remaining = instructionCount - i - 2;
+                        instructionLogPairs.push_back({
+                            [=]() { generateForLoop(proc, declaredVars, remaining); },
+                            "[DEBUG] FOR LOOP(...)"
+                        });
+                        i += 2;
                     } else {
-                        generatePrintInstruction(proc);
+                        instructionLogPairs.push_back({
+                            [=]() { generatePrintInstruction(proc); },
+                            "[DEBUG] PRINT(...)"
+                        });
                         ++i;
                     }
                     break;
-                    
-                default: 
-                    generatePrintInstruction(proc);
+
+                default:
+                    instructionLogPairs.push_back({
+                        [=]() { generatePrintInstruction(proc); },
+                        "[DEBUG] PRINT(...)"
+                    });
                     ++i;
                     break;
             }
+        }
+
+        // Shuffle both together
+        std::shuffle(instructionLogPairs.begin(), instructionLogPairs.end(), rng);
+
+        // Execute all
+        for (auto& [lambda, log] : instructionLogPairs) {
+            lambda();
+            proc->addToLog(log);
         }
     }
 
