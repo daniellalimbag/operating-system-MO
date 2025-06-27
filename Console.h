@@ -83,7 +83,7 @@ private:
             config.minInstructions, config.maxInstructions)(rng);
 
         std::vector<std::string> declaredVars;
-        std::vector<std::pair<std::function<void()>, std::string>> instructionLogPairs;
+        std::vector<std::unique_ptr<IProcessInstruction>> instructions;
 
         // Prepare DECLARE instructions
         int numVars = std::max(1, std::uniform_int_distribution<int>(1, 3)(rng));
@@ -91,14 +91,7 @@ private:
             std::string var = "v" + std::to_string(v + 1);
             uint16_t value = std::uniform_int_distribution<uint16_t>(0, 100)(rng);
             declaredVars.push_back(var);
-
-            instructionLogPairs.push_back({
-                [=]() {
-                    proc->addInstruction(std::make_unique<DeclareInstruction>(var, value));
-                    proc->setVariableValue(var, value);
-                },
-                "[DEBUG] DECLARE(" + var + ", " + std::to_string(value) + ")"
-            });
+            instructions.push_back(std::make_unique<DeclareInstruction>(var, value));
         }
 
         // Other instructions
@@ -108,74 +101,98 @@ private:
             switch (choice) {
                 case 0: // ADD
                     if (!declaredVars.empty()) {
-                        instructionLogPairs.push_back({
-                            [=]() { generateAddInstruction(proc, declaredVars); },
-                            "[DEBUG] ADD(...)"
-                        });
+                        // 3 variables to use
+                        std::string var1 = declaredVars.size() > 0 ? declaredVars[0] : "v1";
+                        std::string var2 = declaredVars.size() > 1 ? declaredVars[1] : "v2";
+                        std::string var3 = declaredVars.size() > 2 ? declaredVars[2] : "v3";
+                        instructions.push_back(std::make_unique<AddInstruction>(var1, var2, var3));
                         ++i;
                     }
                     break;
 
                 case 1: // SUBTRACT
                     if (!declaredVars.empty()) {
-                        instructionLogPairs.push_back({
-                            [=]() { generateSubtractInstruction(proc, declaredVars); },
-                            "[DEBUG] SUBTRACT(...)"
-                        });
+                        std::string var1 = declaredVars.size() > 0 ? declaredVars[0] : "v1";
+                        std::string var2 = declaredVars.size() > 1 ? declaredVars[1] : "v2";
+                        std::string var3 = declaredVars.size() > 2 ? declaredVars[2] : "v3";
+                        instructions.push_back(std::make_unique<SubtractInstruction>(var1, var2, var3));
                         ++i;
                     }
                     break;
 
                 case 2: // SLEEP
-                    instructionLogPairs.push_back({
-                        [=]() { generateSleepInstruction(proc); },
-                        "[DEBUG] SLEEP(...)"
-                    });
-                    ++i;
+                    {
+                        int ticks = std::uniform_int_distribution<int>(1, 5)(rng);
+                        instructions.push_back(std::make_unique<SleepInstruction>(ticks));
+                        ++i;
+                    }
                     break;
 
                 case 3: // PRINT
-                    instructionLogPairs.push_back({
-                        [=]() { generatePrintInstruction(proc); },
-                        "[DEBUG] PRINT(...)"
-                    });
-                    ++i;
+                    {
+                        std::string message = "Hello world from " + proc->getProcessName() + "!";
+                        instructions.push_back(std::make_unique<PrintInstruction>(message));
+                        ++i;
+                    }
                     break;
 
                 case 4: // FOR
                     if (i + 4 < instructionCount && !declaredVars.empty()) {
-                        int remaining = instructionCount - i - 2;
-                        instructionLogPairs.push_back({
-                            [=]() { generateForLoop(proc, declaredVars, remaining); },
-                            "[DEBUG] FOR LOOP(...)"
-                        });
+                        int bodyCount = std::min(instructionCount - i - 2, std::uniform_int_distribution<int>(2, 3)(rng));
+                        std::vector<std::unique_ptr<IProcessInstruction>> bodyInstructions;
+                        for (int b = 0; b < bodyCount; ++b) {
+                            int bodyChoice = std::uniform_int_distribution<int>(0, 2)(rng);
+                            switch (bodyChoice) {
+                                case 0:
+                                    {
+                                        std::string var1 = declaredVars.size() > 0 ? declaredVars[0] : "v1";
+                                        std::string var2 = declaredVars.size() > 1 ? declaredVars[1] : "v2";
+                                        std::string var3 = declaredVars.size() > 2 ? declaredVars[2] : "v3";
+                                        bodyInstructions.push_back(std::make_unique<AddInstruction>(var1, var2, var3));
+                                    }
+                                    break;
+                                case 1:
+                                    {
+                                        std::string var1 = declaredVars.size() > 0 ? declaredVars[0] : "v1";
+                                        std::string var2 = declaredVars.size() > 1 ? declaredVars[1] : "v2";
+                                        std::string var3 = declaredVars.size() > 2 ? declaredVars[2] : "v3";
+                                        bodyInstructions.push_back(std::make_unique<SubtractInstruction>(var1, var2, var3));
+                                    }
+                                    break;
+                                default:
+                                    {
+                                        std::string message = "Hello world from " + proc->getProcessName() + "!";
+                                        bodyInstructions.push_back(std::make_unique<PrintInstruction>(message));
+                                    }
+                                    break;
+                            }
+                        }
+                        int repeats = std::uniform_int_distribution<int>(2, 4)(rng);
+                        instructions.push_back(std::make_unique<ForInstruction>(std::move(bodyInstructions), repeats));
                         i += 2;
                     } else {
-                        instructionLogPairs.push_back({
-                            [=]() { generatePrintInstruction(proc); },
-                            "[DEBUG] PRINT(...)"
-                        });
+                        std::string message = "Hello world from " + proc->getProcessName() + "!";
+                        instructions.push_back(std::make_unique<PrintInstruction>(message));
                         ++i;
                     }
                     break;
 
                 default:
-                    instructionLogPairs.push_back({
-                        [=]() { generatePrintInstruction(proc); },
-                        "[DEBUG] PRINT(...)"
-                    });
-                    ++i;
+                    {
+                        std::string message = "Hello world from " + proc->getProcessName() + "!";
+                        instructions.push_back(std::make_unique<PrintInstruction>(message));
+                        ++i;
+                    }
                     break;
             }
         }
 
-        // Shuffle both together
-        std::shuffle(instructionLogPairs.begin(), instructionLogPairs.end(), rng);
+        // Shuffle all instructions
+        std::shuffle(instructions.begin(), instructions.end(), rng);
 
-        // Execute all
-        for (auto& [lambda, log] : instructionLogPairs) {
-            lambda();
-            proc->addToLog(log);
+        // Add all instructions to the process
+        for (auto& instr : instructions) {
+            proc->addInstruction(std::move(instr));
         }
     }
 
