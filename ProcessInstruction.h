@@ -69,6 +69,7 @@ public:
     PrintInstruction(const std::string& msg) : message(msg) {}
     void execute(class Process& process) override;
     InstructionType getType() const override { return InstructionType::PRINT; }
+    std::string getMessage() const { return message; }
 };
 
 // DECLARE instruction: DECLARE(var, value)

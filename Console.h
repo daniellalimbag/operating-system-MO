@@ -67,15 +67,14 @@ void processGenerationLoop() {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 }
-
-    void generateRandomInstructions(Process* proc) {
+void generateRandomInstructions(Process* proc) {
         int instructionCount = std::uniform_int_distribution<int>(
             config.minInstructions, config.maxInstructions)(rng);
         
         std::vector<std::string> declaredVars;
         int numVars = std::max(1, std::uniform_int_distribution<int>(1, 3)(rng));
         
-        // Declare variables first?? Idk if this is right
+        // Declare variables first
         for (int v = 0; v < numVars; ++v) {
             std::string var = "v" + std::to_string(v + 1);
             uint16_t initialValue = std::uniform_int_distribution<uint16_t>(0, 100)(rng);
@@ -116,7 +115,7 @@ void processGenerationLoop() {
                     break;
                     
                 case 3: // PRINT
-                    generatePrintInstructionWithMessage(proc, proc->getProcessName(), i + 1);
+                    generatePrintInstruction(proc);
                     ++i;
                     break;
                     
@@ -136,7 +135,6 @@ void processGenerationLoop() {
                     break;
             }
         }
-        proc->addInstruction(std::make_unique<PrintInstruction>("Process completed."));
     }
 
     void generateAddInstruction(Process* proc, const std::vector<std::string>& vars) {
@@ -160,11 +158,14 @@ void processGenerationLoop() {
     }
 
     void generatePrintInstruction(Process* proc) {
-        proc->addInstruction(std::make_unique<PrintInstruction>("Hello from PRINT instruction"));
+        // Follow specification: "Hello world from <process_name>!"
+        std::string message = "Hello world from " + proc->getProcessName() + "!";
+        proc->addInstruction(std::make_unique<PrintInstruction>(message));
     }
 
     void generatePrintInstructionWithMessage(Process* proc, const std::string& processName, int lineNum) {
-        std::string message = "Hello from " + processName + " - line " + std::to_string(lineNum);
+        // For custom messages, still follow the general format but include line info
+        std::string message = "Hello world from " + processName + "!";
         proc->addInstruction(std::make_unique<PrintInstruction>(message));
     }
 
@@ -191,7 +192,11 @@ void processGenerationLoop() {
                     }
                     break;
                 default:
-                    bodyInstructions.push_back(std::make_unique<PrintInstruction>("Hello from PRINT instruction"));
+                    // Use the proper default format for PRINT instructions
+                    {
+                        std::string message = "Hello world from " + proc->getProcessName() + "!";
+                        bodyInstructions.push_back(std::make_unique<PrintInstruction>(message));
+                    }
                     break;
             }
         }
@@ -199,7 +204,6 @@ void processGenerationLoop() {
         proc->addInstruction(std::make_unique<ForInstruction>(std::move(bodyInstructions), repeats));
         return 1;
     }
-
     void clearScreen() {
         #ifdef _WIN32
             system("cls");
@@ -220,7 +224,8 @@ void processGenerationLoop() {
             std::cout << "CPU Utilization: " << process->getCPUUtilization() << "%" << std::endl;
         }
 
-        std::cout << "Logs:" << std::endl << std::endl;
+        std::cout << "ID: " << pid << std::endl;
+        std::cout << "Logs:" << std::endl;
 
         std::string logs = process->getLogs();
         std::cout << (logs.empty() ? "No logs available yet." : logs) << std::endl;
@@ -273,7 +278,6 @@ void processGenerationLoop() {
             displayProcessStatus();
         }
         else if (command == "scheduler-start") {
-            // Only start process generation, scheduler should already be running
             if (!generating) {
                 generating = true;
                 processGeneratorThread = std::thread(&OpesyConsole::processGenerationLoop, this);
@@ -283,7 +287,6 @@ void processGenerationLoop() {
             }
         }
         else if (command == "scheduler-stop") {
-            // Only stop process generation, keep scheduler running
             if (generating) {
                 generating = false;
                 if (processGeneratorThread.joinable()) {
@@ -378,46 +381,38 @@ void processGenerationLoop() {
     }
 
     void sessionLoop(const std::string& sessionName, int pid) {
-        auto process = processManager.getProcess(pid);
-        if (!process) return;
+    auto process = processManager.getProcess(pid);
+    if (!process) return;
+    std::string input;
+    clearScreen();
+    while (true) {
+        displayProcessInfo(sessionName, pid, false);
+        std::cout << "root:/> ";
+        std::getline(std::cin, input);
 
-        std::string input;
-        while (true) {
+        if (input == "exit") {
+            clearScreen();
+            displayHeader();
+            return;
+        }
+
+        if (input == "process-smi") {
+            displayProcessInfo(sessionName, pid, true);
+            continue;
+        }
+        if (!input.empty()) {
+            std::cout << "Invalid command." << std::endl;
+        }
+
+        if (process->isComplete()) {
             clearScreen();
             displayProcessInfo(sessionName, pid, false);
-            std::cout << "root:/> ";
-            std::getline(std::cin, input);
-
-            if (input == "exit") {
-                clearScreen();
-                displayHeader();
-                return;
-            }
-
-            if (input == "process-smi") {
-                clearScreen();
-                displayProcessInfo(sessionName, pid, true);
-                continue;
-            }
-
-            if (!input.empty()) {
-                process->addInstruction(std::make_unique<PrintInstruction>(input));
-                std::cout << "Added instruction: " << input << std::endl;
-            }
-
-            if (process->isComplete()) {
-                clearScreen();
-                displayProcessInfo(sessionName, pid, false);
-                std::cout << "Process completed. Press Enter to continue..." << std::endl;
-                std::cin.clear();
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                std::getline(std::cin, input);
-                clearScreen();
-                displayHeader();
-                return;
-            }
+            std::cout << "Process completed." << std::endl;
+            std::cin.clear();
+            continue;
         }
     }
+}
 
     bool handleScreenCommand(const std::string& command) {
         if (command.rfind("screen -s ", 0) == 0) {
@@ -458,7 +453,6 @@ void processGenerationLoop() {
                     processGeneratorThread.join();
                 }
             }
-            // Stop the scheduler when exiting
             scheduler.stop();
             exit(0);
         }
@@ -467,7 +461,6 @@ void processGenerationLoop() {
             initialized = readConfigFromFile("config.txt", config);
             if (initialized) {
                 scheduler.updateConfig(config);
-                // Start the scheduler automatically after initialization
                 scheduler.start();
                 
                 std::cout << "\nSuccessfully initialized from config.txt:\n";
