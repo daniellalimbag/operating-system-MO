@@ -74,8 +74,8 @@ void Scheduler::updateConfig(const SystemConfig& newConfig) {
     
     config = newConfig;
     numCores = newConfig.numCPU;
-    quantumCycles = std::max(1, newConfig.quantumCycles);
-    delayPerExec = std::max(0, newConfig.delaysPerExec);
+    quantumCycles = std::max(uint32_t(1), newConfig.quantumCycles);
+    delayPerExec = std::max(uint32_t(0), newConfig.delaysPerExec);
     
     if (newConfig.scheduler == "rr") {
         algorithm = SchedulingAlgorithm::ROUND_ROBIN;

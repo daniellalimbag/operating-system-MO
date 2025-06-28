@@ -1,6 +1,7 @@
 #include "Config.h"
 #include <fstream>
 #include <iostream>
+#include <cstdint>
 
 bool readConfigFromFile(const std::string& filename, SystemConfig& config) {
     std::ifstream file(filename);
@@ -23,19 +24,29 @@ bool readConfigFromFile(const std::string& filename, SystemConfig& config) {
             config.scheduler = schedulerValue;
         }
         else if (key == "quantum-cycles") {
-            file >> config.quantumCycles;
+            uint32_t val;
+            file >> val;
+            config.quantumCycles = val;
         }
         else if (key == "batch-process-freq") {
-            file >> config.batchProcessFreq;
+            uint32_t val;
+            file >> val;
+            config.batchProcessFreq = val;
         }
         else if (key == "min-ins") {
-            file >> config.minInstructions;
+            uint32_t val;
+            file >> val;
+            config.minInstructions = val;
         }
         else if (key == "max-ins") {
-            file >> config.maxInstructions;
+            uint32_t val;
+            file >> val;
+            config.maxInstructions = val;
         }
         else if (key == "delay-per-exec") {
-            file >> config.delaysPerExec;
+            uint32_t val;
+            file >> val;
+            config.delaysPerExec = val;
         }
         else {
             std::cerr << "Warning: Unknown config parameter: " << key << "\n";
