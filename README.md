@@ -10,6 +10,7 @@ This is the first group machine project in CSOPESY: Process Multiplexer and CLI.
 - Process creation and management via CLI commands
 - Per-process instruction execution (PRINT, DECLARE, ADD, SUBTRACT, SLEEP, FOR)
 - Real-time process status and CPU utilization reporting
+- Marquee Console that bounces text with dynamic borders
 - Configurable system parameters via `config.txt`
 
 ## How to Build
