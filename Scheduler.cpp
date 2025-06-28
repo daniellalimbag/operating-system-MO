@@ -59,14 +59,27 @@ void Scheduler::stop() {
     if (!running) return;
     running = false;
     cv.notify_all();
-    
+
     if (schedulerThread.joinable()) schedulerThread.join();
-    
+
     for (auto& t : workerThreads) {
         if (t.joinable()) t.join();
     }
     workerThreads.clear();
+
+    for (int i = 0; i < numCores; ++i) {
+        if (coreBusy[i]->load()) {
+            int pid = coreProcess[i]->load();
+            if (pid != -1) {
+                processManager.assignProcessToCore(pid, -1);
+            }
+            coreBusy[i]->store(false);
+            coreProcess[i]->store(-1);
+            coreQuantumRemaining[i]->store(0);
+        }
+    }
 }
+
 
 void Scheduler::updateConfig(const SystemConfig& newConfig) {
     bool wasRunning = running.load();
