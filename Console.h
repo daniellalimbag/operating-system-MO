@@ -519,7 +519,10 @@ private:
                 std::cout << "batch-process-freq: " << config.batchProcessFreq << '\n';
                 std::cout << "min-ins: " << config.minInstructions << '\n';
                 std::cout << "max-ins: " << config.maxInstructions << '\n';
-                std::cout << "delay-per-exec: " << config.delaysPerExec << "\n\n";
+                std::cout << "delay-per-exec: " << config.delaysPerExec << '\n';
+                std::cout << "max-overall-mem: " << config.maxOverallMem << '\n';
+                std::cout << "mem-per-frame: " << config.memPerFrame << '\n';
+                std::cout << "mem-per-proc: " << config.memPerProc << "\n\n";
             } else {
                 std::cout << "Failed to initialize from config.txt\n";
             }

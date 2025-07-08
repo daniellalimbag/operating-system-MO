@@ -48,6 +48,35 @@ bool readConfigFromFile(const std::string& filename, SystemConfig& config) {
             file >> val;
             config.delaysPerExec = val;
         }
+        else if (key == "max-overall-mem") {
+            uint32_t val;
+            file >> val;
+            if (val < 64 || val > 65536 || (val & (val - 1)) != 0) {
+                std::cerr << "Error: max-overall-mem must be a power of 2 in [2^6, 2^16] (64 to 65536)\n";
+                return false;
+            }
+            config.maxOverallMem = val;
+        }
+        else if (key == "mem-per-frame") {
+            uint32_t val;
+            file >> val;
+            //Adjusted range for the purposes of this HW
+            if (val < 16 || val > 65536 || (val & (val - 1)) != 0) {
+                std::cerr << "Error: mem-per-frame must be a power of 2 in [2^4, 2^16] (64 to 65536)\n";
+                return false;
+            }
+            config.memPerFrame = val;
+        }
+        //NOTE: For MO2, this should be changed to min-mem-per-proc and max-mem-per-proc
+        else if (key == "mem-per-proc") {
+            uint32_t val;
+            file >> val;
+            if (val < 64 || val > 65536 || (val & (val - 1)) != 0) {
+                std::cerr << "Error: mem-per-proc must be a power of 2 in [2^6, 2^16] (64 to 65536)\n";
+                return false;
+            }
+            config.memPerProc = val;
+        }
         else {
             std::cerr << "Warning: Unknown config parameter: " << key << "\n";
             std::string dummy;
