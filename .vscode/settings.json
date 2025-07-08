@@ -123,6 +123,7 @@
     "text_encoding": "cpp",
     "cstring": "cpp",
     "bitset": "cpp",
-    "regex": "cpp"
+    "regex": "cpp",
+    "unordered_set": "cpp"
   }
 }

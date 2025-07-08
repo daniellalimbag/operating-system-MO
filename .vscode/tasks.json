@@ -13,6 +13,7 @@
                 "ProcessInstruction.cpp",
                 "Scheduler.cpp",
                 "MarqueeConsole.cpp",
+                "FlatMemoryAllocator.cpp",
                 "-o",
                 "csopesy.exe"
             ],
@@ -31,6 +32,7 @@
                     "ProcessInstruction.cpp",
                     "Scheduler.cpp",
                     "MarqueeConsole.cpp",
+                    "FlatMemoryAllocator.cpp",
                     "-o",
                     "csopesy"
                 ]
