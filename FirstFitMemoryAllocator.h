@@ -3,6 +3,9 @@
 #include <ostream>
 #include <map>
 
+class FirstFitMemoryAllocator;
+extern FirstFitMemoryAllocator* globalMemoryAllocator;
+
 struct Block {
     int start;
     int size;
@@ -19,6 +22,7 @@ struct AllocatedBlock {
 class FirstFitMemoryAllocator {
 public:
     FirstFitMemoryAllocator(int totalMem, int memPerProc);
+    bool isAllocated(int processId) const;
     bool allocate(int processId);
     void release(int processId);
     int getExternalFragmentation() const;

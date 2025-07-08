@@ -1,6 +1,5 @@
 #ifndef CONSOLE_H
 #define CONSOLE_H
-
 #include <iostream>
 #include <string>
 #include <cstdlib>
@@ -27,9 +26,14 @@
 #include "Config.h"
 #include "ProcessInstruction.h"
 #include "MarqueeConsole.h"
+#include "FirstFitMemoryAllocator.h"
+#include <set>
 #include <fstream>
 
 class OpesyConsole {
+private:
+    std::unique_ptr<FirstFitMemoryAllocator> memoryAllocator;
+    int quantumCycle = 0;
 private:
     ProcessManager processManager;
     Scheduler scheduler{processManager};
@@ -52,6 +56,7 @@ private:
     }
 
     void processGenerationLoop() {
+        quantumCycle = 0;
         uint64_t lastProcessGenTick = 0;
         
         while (generating) {
@@ -62,6 +67,17 @@ private:
                 (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq * 10)) { //multiplied by 10 for now
                 
                 lastProcessGenTick = currentTick;
+                quantumCycle++;
+                // Release memory for all completed processes before snapshot
+                {
+                    auto processes = processManager.getAllProcesses();
+                    for (const auto& process : processes) {
+                        if (process->isComplete()) {
+                            memoryAllocator->release(process->getPID());
+                        }
+                    }
+                }
+                outputMemorySnapshot(quantumCycle);
                 
                 std::ostringstream oss;
                 oss << "p" << std::setw(2) << std::setfill('0') << processCounter++;
@@ -70,6 +86,10 @@ private:
                 Process* proc = processManager.getProcess(pid);
                 if (proc) {
                     generateRandomInstructions(proc);
+                    if (!memoryAllocator->allocate(pid)) {
+                        scheduler.addProcess(pid);
+                        continue;
+                    }
                 }
                 scheduler.addProcess(pid);
             }
@@ -300,25 +320,31 @@ private:
         auto processes = processManager.getAllProcesses();
         out << (showRunning ? "Running" : "Finished") << " processes:" << std::endl;
 
+        // Gather all PIDs currently assigned to a core
+        std::set<int> runningPIDs;
+        int totalCores = config.numCPU;
+        for (int i = 0; i < totalCores; ++i) {
+            int pid = scheduler.getCoreProcess(i);
+            if (pid != -1) runningPIDs.insert(pid);
+        }
+
         for (const auto& process : processes) {
-            bool isRunning = !process->isComplete();
-            int core = process->getCore();
-            if (isRunning == showRunning) {
-                if (showRunning && core == -1) continue;
-                auto timestamp = process->getTimestamp();
-                out << process->getProcessName() << "\t(" << timestamp << ")\t";
-
-                size_t currentLine = process->getCurrentInstructionNumber();
-                size_t totalLines = process->countEffectiveInstructions();
-
-                if (showRunning) {
-                    out << "Core: " << std::to_string(core)
-                        << "  " << currentLine << " / " << totalLines;
-                } else {
-                    out << "Finished " << totalLines << " / " << totalLines;
-                }
-                out << std::endl;
+            if (showRunning) {
+                if (runningPIDs.count(process->getPID()) == 0) continue;
+            } else {
+                if (!process->isComplete()) continue;
             }
+            auto timestamp = process->getTimestamp();
+            out << process->getProcessName() << "\t(" << timestamp << ")\t";
+            size_t currentLine = process->getCurrentInstructionNumber();
+            size_t totalLines = process->countEffectiveInstructions();
+            if (showRunning) {
+                out << "Core: " << std::to_string(process->getCore())
+                    << "  " << currentLine << " / " << totalLines;
+            } else {
+                out << "Finished " << totalLines << " / " << totalLines;
+            }
+            out << std::endl;
         }
         out << std::endl;
     }
@@ -353,7 +379,16 @@ private:
                 if (processGeneratorThread.joinable()) {
                     processGeneratorThread.join();
                 }
-                std::cout << "Dummy process generation stopped." << std::endl;
+                // Release memory for all completed processes when generation stops
+            {
+                auto processes = processManager.getAllProcesses();
+                for (const auto& process : processes) {
+                    if (process->isComplete()) {
+                        memoryAllocator->release(process->getPID());
+                    }
+                }
+            }
+            std::cout << "Dummy process generation stopped." << std::endl;
             } else {
                 std::cout << "Dummy process generation is not running." << std::endl;
             }
@@ -454,6 +489,8 @@ private:
             }
 
             if (process->isComplete()) {
+                // Release memory when process completes
+                memoryAllocator->release(pid);
                 clearScreen();
                 displayProcessInfo(sessionName, pid, false);
                 std::cout << "Process completed." << std::endl;
@@ -461,6 +498,21 @@ private:
                 continue;
             }
         }
+    }
+
+    void outputMemorySnapshot(int quantumCycle) {
+        std::ostringstream filename;
+        filename << "memory_stamp_" << std::setw(2) << std::setfill('0') << quantumCycle << ".txt";
+        std::ofstream out(filename.str());
+        // Timestamp
+        std::time_t now = std::time(nullptr);
+        char buf[64];
+        std::strftime(buf, sizeof(buf), "%d/%m/%Y %I:%M:%S%p", std::localtime(&now));
+        out << "Timestamp: (" << buf << ")\n";
+        out << "Number of processes in memory: " << memoryAllocator->getNumProcessesInMemory() << "\n";
+        out << "Total external fragmentation in KB: " << (memoryAllocator->getExternalFragmentation() / 1024) << "\n\n";
+        memoryAllocator->printMemory(out);
+        out.close();
     }
 
     bool handleScreenCommand(const std::string& command) {
@@ -509,6 +561,11 @@ private:
         if (command == "initialize") {
             initialized = readConfigFromFile("config.txt", config);
             if (initialized) {
+                quantumCycle = 0;
+                memoryAllocator = std::make_unique<FirstFitMemoryAllocator>(config.maxOverallMem, config.memPerProc);
+globalMemoryAllocator = memoryAllocator.get();
+                memoryAllocator = std::make_unique<FirstFitMemoryAllocator>(config.maxOverallMem, config.memPerProc);
+globalMemoryAllocator = memoryAllocator.get();
                 scheduler.updateConfig(config);
                 scheduler.start();
                 

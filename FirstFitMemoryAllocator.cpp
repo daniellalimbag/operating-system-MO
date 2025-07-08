@@ -1,4 +1,6 @@
 #include "FirstFitMemoryAllocator.h"
+
+FirstFitMemoryAllocator* globalMemoryAllocator = nullptr;
 #include <algorithm>
 #include <iomanip>
 #include <ctime>
@@ -35,6 +37,12 @@ void FirstFitMemoryAllocator::release(int processId) {
         allocatedBlocks.erase(it);
         mergeFreeBlocks();
     }
+}
+
+bool FirstFitMemoryAllocator::isAllocated(int processId) const {
+    return std::any_of(allocatedBlocks.begin(), allocatedBlocks.end(), [processId](const AllocatedBlock& ab) {
+        return ab.processId == processId;
+    });
 }
 
 void FirstFitMemoryAllocator::mergeFreeBlocks() {

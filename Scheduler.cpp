@@ -2,6 +2,7 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include "FirstFitMemoryAllocator.h"
 
 // Global CPU tick counter
 std::atomic<uint64_t> cpuTickCount{0};
@@ -197,7 +198,17 @@ void Scheduler::scheduleRR() {
             readyQueue.pop();
             
             Process* process = processManager.getProcess(pid);
+            // Try to allocate memory for the process if not already allocated
             if (process && !process->isComplete()) {
+                // Check if process already has memory allocated (assume a method or flag, or check with allocator)
+                extern FirstFitMemoryAllocator* globalMemoryAllocator; // Or however you access the allocator
+                if (globalMemoryAllocator && !globalMemoryAllocator->isAllocated(pid)) {
+                    if (!globalMemoryAllocator->allocate(pid)) {
+                        // Memory full, put back to tail of ready queue
+                        readyQueue.push(pid);
+                        continue;
+                    }
+                }
                 assignProcessToCore(pid, core);
                 coreQuantumRemaining[core]->store(quantumCycles);
             }

@@ -13,6 +13,7 @@ extern std::atomic<uint64_t> cpuTickCount; // Global CPU tick counter
 #include <chrono>
 #include "ProcessManager.h"
 #include "Config.h"
+#include "FirstFitMemoryAllocator.h"
 
 enum class SchedulingAlgorithm {
     FCFS,
