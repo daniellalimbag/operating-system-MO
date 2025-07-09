@@ -164,7 +164,6 @@ void Scheduler::scheduleFCFS() {
             
             Process* process = processManager.getProcess(pid);
             if (process && !process->isComplete()) {
-                extern FirstFitMemoryAllocator* globalMemoryAllocator;
                 assignProcessToCore(pid, core);
             }
         }
