@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <queue>
 #include <thread>
 #include <mutex>
@@ -36,6 +37,9 @@ private:
     SystemConfig config;
     int numCores;
     std::vector<std::pair<int, int>> waitingQueue;
+    std::function<void(uint64_t)> memorySnapshotCallback;
+    std::atomic<int> quantumCycleCounter{0};
+    uint64_t lastSnapshotTick = 0;
 
     int quantumCycles;
     int delayPerExec;
@@ -66,4 +70,5 @@ public:
     uint64_t getCurrentTick() const { return cpuTickCount.load(); }
     void checkWaitingQueue();
     void addToWaitingQueue(int pid, int sleepTicks);
+    void setMemorySnapshotCallback(std::function<void(uint64_t)> cb) { memorySnapshotCallback = std::move(cb); }
 };

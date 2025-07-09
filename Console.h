@@ -1,6 +1,7 @@
 #ifndef CONSOLE_H
 #define CONSOLE_H
 #include <iostream>
+#include <filesystem>
 #include <string>
 #include <cstdlib>
 #include <vector>
@@ -37,6 +38,12 @@ private:
 private:
     ProcessManager processManager;
     Scheduler scheduler{processManager};
+    void setupMemorySnapshotCallback() {
+        scheduler.setMemorySnapshotCallback([this](uint64_t tick) { 
+            static int snapshotCounter = 1;
+            this->outputMemorySnapshot(snapshotCounter++); 
+        });
+    }
     SystemConfig config;
     bool initialized = false;
     std::thread processGeneratorThread;
@@ -55,48 +62,42 @@ private:
                 std::find(validCommands.begin(), validCommands.end(), command) != validCommands.end());
     }
 
-    void processGenerationLoop() {
-        quantumCycle = 0;
-        uint64_t lastProcessGenTick = 0;
+void processGenerationLoop() {
+    uint64_t lastProcessGenTick = 0;
+    while (generating) {
+        uint64_t currentTick = cpuTickCount.load();
         
-        while (generating) {
-            uint64_t currentTick = cpuTickCount.load();
+        // Generate process based on batch frequency
+        if (config.batchProcessFreq > 0 && 
+            (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq * 10)) {
             
-            // Generate process based on batch frequency
-            if (config.batchProcessFreq > 0 && 
-                (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq * 10)) { //multiplied by 10 for now
-                
-                lastProcessGenTick = currentTick;
-                quantumCycle++;
-                // Release memory for all completed processes before snapshot
-                {
-                    auto processes = processManager.getAllProcesses();
-                    for (const auto& process : processes) {
-                        if (process->isComplete()) {
-                            memoryAllocator->release(process->getPID());
-                        }
+            lastProcessGenTick = currentTick;
+            {
+                auto processes = processManager.getAllProcesses();
+                for (const auto& process : processes) {
+                    if (process->isComplete()) {
+                        memoryAllocator->release(process->getPID());
                     }
                 }
-                outputMemorySnapshot(quantumCycle);
-                
-                std::ostringstream oss;
-                oss << "p" << std::setw(2) << std::setfill('0') << processCounter++;
-                std::string name = oss.str();
-                int pid = processManager.createProcess(name);
-                Process* proc = processManager.getProcess(pid);
-                if (proc) {
-                    generateRandomInstructions(proc);
-                    if (!memoryAllocator->allocate(pid)) {
-                        scheduler.addProcess(pid);
-                        continue;
-                    }
+            }            
+            std::ostringstream oss;
+            oss << "p" << std::setw(2) << std::setfill('0') << processCounter++;
+            std::string name = oss.str();
+            int pid = processManager.createProcess(name);
+            Process* proc = processManager.getProcess(pid);
+            if (proc) {
+                generateRandomInstructions(proc);
+                if (!memoryAllocator->allocate(pid)) {
+                    scheduler.addProcess(pid);
+                    continue;
                 }
-                scheduler.addProcess(pid);
             }
-            
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            scheduler.addProcess(pid);
         }
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
+}
 
     void generateRandomInstructions(Process* proc) {
         int instructionCount = std::uniform_int_distribution<int>(
@@ -379,15 +380,6 @@ private:
                 if (processGeneratorThread.joinable()) {
                     processGeneratorThread.join();
                 }
-                // Release memory for all completed processes when generation stops
-            {
-                auto processes = processManager.getAllProcesses();
-                for (const auto& process : processes) {
-                    if (process->isComplete()) {
-                        memoryAllocator->release(process->getPID());
-                    }
-                }
-            }
             std::cout << "Dummy process generation stopped." << std::endl;
             } else {
                 std::cout << "Dummy process generation is not running." << std::endl;
@@ -489,7 +481,6 @@ private:
             }
 
             if (process->isComplete()) {
-                // Release memory when process completes
                 memoryAllocator->release(pid);
                 clearScreen();
                 displayProcessInfo(sessionName, pid, false);
@@ -500,20 +491,31 @@ private:
         }
     }
 
-    void outputMemorySnapshot(int quantumCycle) {
-        std::ostringstream filename;
-        filename << "memory_stamp_" << std::setw(2) << std::setfill('0') << quantumCycle << ".txt";
-        std::ofstream out(filename.str());
-        // Timestamp
-        std::time_t now = std::time(nullptr);
-        char buf[64];
-        std::strftime(buf, sizeof(buf), "%d/%m/%Y %I:%M:%S%p", std::localtime(&now));
-        out << "Timestamp: (" << buf << ")\n";
-        out << "Number of processes in memory: " << memoryAllocator->getNumProcessesInMemory() << "\n";
-        out << "Total external fragmentation in KB: " << (memoryAllocator->getExternalFragmentation() / 1024) << "\n\n";
-        memoryAllocator->printMemory(out);
-        out.close();
+void outputMemorySnapshot(int quantumCycle) {
+    std::string dirName = "memory_stamps";
+    
+    std::filesystem::create_directory(dirName);
+    
+    std::ostringstream filename;
+    filename << dirName << "/memory_stamp_" << std::setw(2) << std::setfill('0') << quantumCycle << ".txt";
+    
+    std::ofstream out(filename.str());
+    if (!out.is_open()) {
+        std::cerr << "Failed to create memory snapshot file: " << filename.str() << std::endl;
+        return;
     }
+    
+    // Timestamp
+    std::time_t now = std::time(nullptr);
+    char buf[64];
+    std::strftime(buf, sizeof(buf), "%d/%m/%Y %I:%M:%S%p", std::localtime(&now));
+    out << "Timestamp: (" << buf << ")\n";
+    out << "Number of processes in memory: " << memoryAllocator->getNumProcessesInMemory() << "\n";
+    out << "Total external fragmentation in KB: " << (memoryAllocator->getExternalFragmentation() / 1024) << "\n\n";
+    memoryAllocator->printMemory(out);
+    out.close();
+    }
+
 
     bool handleScreenCommand(const std::string& command) {
         if (command.rfind("screen -s ", 0) == 0) {
@@ -545,6 +547,8 @@ private:
     }
 
     void processCommand(const std::string& command) {
+        static bool snapshotCallbackSet = false;
+        if (!snapshotCallbackSet) { setupMemorySnapshotCallback(); snapshotCallbackSet = true; }
         if (handleScreenCommand(command)) return;
         if (command == "exit") {
             std::cout << "Exiting CSOPESY CLI..." << std::endl;

@@ -44,6 +44,10 @@ Scheduler::~Scheduler() {
 
 void Scheduler::start() {
     if (running) return;
+    
+    quantumCycleCounter.store(0);
+    lastSnapshotTick = 0;
+    
     running = true;
     
     // Start scheduler loop (for process scheduling)
@@ -175,6 +179,10 @@ void Scheduler::scheduleRR() {
             if (!currentProcess || currentProcess->isComplete()) {
                 shouldPreempt = true;
                 if (currentProcess) {
+                    extern FirstFitMemoryAllocator* globalMemoryAllocator;
+                    if (globalMemoryAllocator && globalMemoryAllocator->isAllocated(currentPid)) {
+                        globalMemoryAllocator->release(currentPid);
+                    }
                     processManager.assignProcessToCore(currentPid, -1);
                 }
             }
@@ -198,13 +206,10 @@ void Scheduler::scheduleRR() {
             readyQueue.pop();
             
             Process* process = processManager.getProcess(pid);
-            // Try to allocate memory for the process if not already allocated
             if (process && !process->isComplete()) {
-                // Check if process already has memory allocated (assume a method or flag, or check with allocator)
-                extern FirstFitMemoryAllocator* globalMemoryAllocator; // Or however you access the allocator
+                extern FirstFitMemoryAllocator* globalMemoryAllocator;
                 if (globalMemoryAllocator && !globalMemoryAllocator->isAllocated(pid)) {
                     if (!globalMemoryAllocator->allocate(pid)) {
-                        // Memory full, put back to tail of ready queue
                         readyQueue.push(pid);
                         continue;
                     }
@@ -267,6 +272,16 @@ void Scheduler::workerLoop(int core) {
                         int remaining = coreQuantumRemaining[core]->load();
                         if (remaining > 0) {
                             coreQuantumRemaining[core]->store(remaining - 1);
+                            
+                            if (remaining - 1 == 0 && this->memorySnapshotCallback) {
+                                int currentQuantumCycle = quantumCycleCounter.fetch_add(1) + 1;
+                                this->memorySnapshotCallback(currentQuantumCycle);
+                                lastSnapshotTick = cpuTickCount.load();
+                            }
+                        }
+                    } else if (algorithm == SchedulingAlgorithm::FCFS) {
+                        if (process->isComplete() && this->memorySnapshotCallback) {
+                            uint64_t currentTick = cpuTickCount.load();
                         }
                     }
 
@@ -289,6 +304,10 @@ void Scheduler::workerLoop(int core) {
                     }
                 } else {
                     processManager.assignProcessToCore(pid, -1);
+                    extern FirstFitMemoryAllocator* globalMemoryAllocator;
+                    if (globalMemoryAllocator) {
+                        globalMemoryAllocator->release(pid);
+                    }
                     coreBusy[core]->store(false);
                     coreProcess[core]->store(-1);
                     coreQuantumRemaining[core]->store(0);

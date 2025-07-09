@@ -1,4 +1,5 @@
 #include "FirstFitMemoryAllocator.h"
+#include <iostream>
 
 FirstFitMemoryAllocator* globalMemoryAllocator = nullptr;
 #include <algorithm>
