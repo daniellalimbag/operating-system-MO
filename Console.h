@@ -31,6 +31,7 @@
 #include <set>
 #include <fstream>
 
+extern std::atomic<uint64_t> cpuTickCount;
 class OpesyConsole {
 private:
     std::unique_ptr<FirstFitMemoryAllocator> memoryAllocator;
@@ -63,39 +64,31 @@ private:
     }
 
 void processGenerationLoop() {
-    uint64_t lastProcessGenTick = 0;
+    static uint64_t lastProcessGenerationTick = 0;
+    
     while (generating) {
         uint64_t currentTick = cpuTickCount.load();
         
         // Generate process based on batch frequency
-        if (config.batchProcessFreq > 0 && 
-            (currentTick - lastProcessGenTick) >= static_cast<uint64_t>(config.batchProcessFreq * 10)) {
-            
-            lastProcessGenTick = currentTick;
-            {
-                auto processes = processManager.getAllProcesses();
-                for (const auto& process : processes) {
-                    if (process->isComplete()) {
-                        memoryAllocator->release(process->getPID());
-                    }
-                }
-            }            
+        if (currentTick - lastProcessGenerationTick >= config.batchProcessFreq) {
+            lastProcessGenerationTick = currentTick;
             std::ostringstream oss;
             oss << "p" << std::setw(2) << std::setfill('0') << processCounter++;
             std::string name = oss.str();
             int pid = processManager.createProcess(name);
             Process* proc = processManager.getProcess(pid);
+            
             if (proc) {
                 generateRandomInstructions(proc);
                 if (!memoryAllocator->allocate(pid)) {
                     scheduler.addProcess(pid);
                     continue;
                 }
+                scheduler.addProcess(pid);
             }
-            scheduler.addProcess(pid);
         }
         
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 }
 

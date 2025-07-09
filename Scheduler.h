@@ -1,4 +1,3 @@
-// Fixed Scheduler.h
 #pragma once
 #include <functional>
 #include <queue>
@@ -54,7 +53,7 @@ private:
     void schedulerLoop();
     void workerLoop(int core);
     void checkAndTakeSnapshot();
-    
+
 public:
     Scheduler(ProcessManager& pm);
     ~Scheduler();

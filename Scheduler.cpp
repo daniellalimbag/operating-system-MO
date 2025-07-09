@@ -1,4 +1,3 @@
-// Fixed Scheduler.cpp
 #include "Scheduler.h"
 #include <atomic>
 #include <thread>
@@ -165,7 +164,6 @@ void Scheduler::scheduleFCFS() {
             
             Process* process = processManager.getProcess(pid);
             if (process && !process->isComplete()) {
-                // Check memory allocation
                 extern FirstFitMemoryAllocator* globalMemoryAllocator;
                 if (globalMemoryAllocator && !globalMemoryAllocator->isAllocated(pid)) {
                     if (!globalMemoryAllocator->allocate(pid)) {
@@ -183,7 +181,6 @@ void Scheduler::scheduleFCFS() {
 void Scheduler::scheduleRR() {
     std::lock_guard<std::mutex> lock(queueMutex);
     
-    // Check for processes that need to be preempted or completed
     for (int core = 0; core < numCores; ++core) {
         if (coreBusy[core]->load()) {
             int currentPid = coreProcess[core]->load();
@@ -194,7 +191,6 @@ void Scheduler::scheduleRR() {
             if (!currentProcess || currentProcess->isComplete()) {
                 shouldPreempt = true;
                 if (currentProcess && currentProcess->isComplete()) {
-                    // Process completed, release memory
                     extern FirstFitMemoryAllocator* globalMemoryAllocator;
                     if (globalMemoryAllocator && globalMemoryAllocator->isAllocated(currentPid)) {
                         globalMemoryAllocator->release(currentPid);
@@ -226,11 +222,9 @@ void Scheduler::scheduleRR() {
             
             Process* process = processManager.getProcess(pid);
             if (process && !process->isComplete()) {
-                // Check memory allocation
                 extern FirstFitMemoryAllocator* globalMemoryAllocator;
                 if (globalMemoryAllocator && !globalMemoryAllocator->isAllocated(pid)) {
                     if (!globalMemoryAllocator->allocate(pid)) {
-                        // Memory not available, put back in queue
                         readyQueue.push(pid);
                         continue;
                     }
@@ -320,11 +314,7 @@ void Scheduler::workerLoop(int core) {
                         coreQuantumRemaining[core]->store(0);
                         continue;
                     }
-
-                    // Execute instruction
                     std::string result = process->executeNextInstruction();
-
-                    // Decrement quantum for RR
                     if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
                         int remaining = coreQuantumRemaining[core]->load();
                         if (remaining > 0) {
@@ -336,7 +326,6 @@ void Scheduler::workerLoop(int core) {
                         std::this_thread::sleep_for(std::chrono::milliseconds(delayPerExec));
                     }
                 } else {
-                    // Process completed
                     processManager.assignProcessToCore(pid, -1);
                     extern FirstFitMemoryAllocator* globalMemoryAllocator;
                     if (globalMemoryAllocator && globalMemoryAllocator->isAllocated(pid)) {
