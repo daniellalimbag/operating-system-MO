@@ -1,3 +1,4 @@
+// Fixed Scheduler.h
 #pragma once
 #include <functional>
 #include <queue>
@@ -40,6 +41,8 @@ private:
     std::function<void(uint64_t)> memorySnapshotCallback;
     std::atomic<int> quantumCycleCounter{0};
     uint64_t lastSnapshotTick = 0;
+    int currentQuantumTick = 0;
+    bool finalSnapshotTaken = false;
 
     int quantumCycles;
     int delayPerExec;
@@ -50,7 +53,8 @@ private:
     int calculateCoreUtilization();
     void schedulerLoop();
     void workerLoop(int core);
-
+    void checkAndTakeSnapshot();
+    
 public:
     Scheduler(ProcessManager& pm);
     ~Scheduler();
