@@ -206,23 +206,36 @@ void Scheduler::scheduleRR() {
         }
     }
     
-    // Assign new processes to available cores
     for (int core = 0; core < numCores; ++core) {
         if (!coreBusy[core]->load() && !readyQueue.empty()) {
-            int pid = readyQueue.front();
-            readyQueue.pop();
+            bool processAssigned = false;
+            std::queue<int> tempQueue;
             
-            Process* process = processManager.getProcess(pid);
-            if (process && !process->isComplete()) {
+            while (!readyQueue.empty() && !processAssigned) {
+                int pid = readyQueue.front();
+                readyQueue.pop();
+                
+                Process* process = processManager.getProcess(pid);
+                if (!process || process->isComplete()) {
+                    continue;
+                }
+                
                 extern FirstFitMemoryAllocator* globalMemoryAllocator;
                 if (globalMemoryAllocator && !globalMemoryAllocator->isAllocated(pid)) {
                     if (!globalMemoryAllocator->allocate(pid)) {
-                        readyQueue.push(pid);
+                        tempQueue.push(pid);
                         continue;
                     }
                 }
+                
                 assignProcessToCore(pid, core);
                 coreQuantumRemaining[core]->store(quantumCycles);
+                processAssigned = true;
+            }
+            
+            while (!tempQueue.empty()) {
+                readyQueue.push(tempQueue.front());
+                tempQueue.pop();
             }
         }
     }
@@ -264,7 +277,6 @@ void Scheduler::schedulerLoop() {
                 break;
         }
         
-        // Check if we need to take a snapshot for RR
         if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
             checkAndTakeSnapshot();
         }
