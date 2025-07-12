@@ -8,4 +8,5 @@ config.txt
 .vscode/c_cpp_properties.json
 .vscode/tasks.json
 .git/
+./memory_stamps
 csopesy.dSYM/
