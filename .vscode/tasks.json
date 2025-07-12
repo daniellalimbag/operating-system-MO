@@ -14,6 +14,7 @@
                 "Scheduler.cpp",
                 "MarqueeConsole.cpp",
                 "FlatMemoryAllocator.cpp",
+                "FirstFitMemoryAllocator.cpp",
                 "-o",
                 "csopesy.exe"
             ],
@@ -33,6 +34,7 @@
                     "Scheduler.cpp",
                     "MarqueeConsole.cpp",
                     "FlatMemoryAllocator.cpp",
+                    "FirstFitMemoryAllocator.cpp",
                     "-o",
                     "csopesy"
                 ]

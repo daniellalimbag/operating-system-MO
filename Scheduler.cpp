@@ -2,6 +2,7 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include "FirstFitMemoryAllocator.h"
 
 // Global CPU tick counter
 std::atomic<uint64_t> cpuTickCount{0};
@@ -43,6 +44,11 @@ Scheduler::~Scheduler() {
 
 void Scheduler::start() {
     if (running) return;
+    
+    quantumCycleCounter.store(0);
+    lastSnapshotTick = 0;
+    currentQuantumTick = 0;
+    
     running = true;
     
     // Start scheduler loop (for process scheduling)
@@ -79,7 +85,6 @@ void Scheduler::stop() {
         }
     }
 }
-
 
 void Scheduler::updateConfig(const SystemConfig& newConfig) {
     bool wasRunning = running.load();
@@ -156,7 +161,11 @@ void Scheduler::scheduleFCFS() {
         if (!coreBusy[core]->load() && !readyQueue.empty()) {
             int pid = readyQueue.front();
             readyQueue.pop();
-            assignProcessToCore(pid, core);
+            
+            Process* process = processManager.getProcess(pid);
+            if (process && !process->isComplete()) {
+                assignProcessToCore(pid, core);
+            }
         }
     }
 }
@@ -173,6 +182,12 @@ void Scheduler::scheduleRR() {
             
             if (!currentProcess || currentProcess->isComplete()) {
                 shouldPreempt = true;
+                if (currentProcess && currentProcess->isComplete()) {
+                    extern FirstFitMemoryAllocator* globalMemoryAllocator;
+                    if (globalMemoryAllocator && globalMemoryAllocator->isAllocated(currentPid)) {
+                        globalMemoryAllocator->release(currentPid);
+                    }
+                }
                 if (currentProcess) {
                     processManager.assignProcessToCore(currentPid, -1);
                 }
@@ -193,13 +208,34 @@ void Scheduler::scheduleRR() {
     
     for (int core = 0; core < numCores; ++core) {
         if (!coreBusy[core]->load() && !readyQueue.empty()) {
-            int pid = readyQueue.front();
-            readyQueue.pop();
+            bool processAssigned = false;
+            std::queue<int> tempQueue;
             
-            Process* process = processManager.getProcess(pid);
-            if (process && !process->isComplete()) {
+            while (!readyQueue.empty() && !processAssigned) {
+                int pid = readyQueue.front();
+                readyQueue.pop();
+                
+                Process* process = processManager.getProcess(pid);
+                if (!process || process->isComplete()) {
+                    continue;
+                }
+                
+                extern FirstFitMemoryAllocator* globalMemoryAllocator;
+                if (globalMemoryAllocator && !globalMemoryAllocator->isAllocated(pid)) {
+                    if (!globalMemoryAllocator->allocate(pid)) {
+                        tempQueue.push(pid);
+                        continue;
+                    }
+                }
+                
                 assignProcessToCore(pid, core);
                 coreQuantumRemaining[core]->store(quantumCycles);
+                processAssigned = true;
+            }
+            
+            while (!tempQueue.empty()) {
+                readyQueue.push(tempQueue.front());
+                tempQueue.pop();
             }
         }
     }
@@ -229,6 +265,7 @@ void Scheduler::schedulerLoop() {
     while (running) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         if (!running) break;
+        
         checkWaitingQueue();
         
         switch (algorithm) {
@@ -238,6 +275,23 @@ void Scheduler::schedulerLoop() {
             case SchedulingAlgorithm::ROUND_ROBIN:
                 scheduleRR();
                 break;
+        }
+        
+        if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
+            checkAndTakeSnapshot();
+        }
+    }
+}
+
+void Scheduler::checkAndTakeSnapshot() {
+    currentQuantumTick++;
+    
+    // Take snapshot every quantum cycles
+    if (currentQuantumTick >= quantumCycles) {
+        currentQuantumTick = 0;
+        if (memorySnapshotCallback) {
+            int snapshotNum = quantumCycleCounter.fetch_add(1) + 1;
+            memorySnapshotCallback(snapshotNum);
         }
     }
 }
@@ -252,13 +306,7 @@ void Scheduler::workerLoop(int core) {
 
             if (process) {
                 if (!process->isComplete()) {
-                    if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
-                        int remaining = coreQuantumRemaining[core]->load();
-                        if (remaining > 0) {
-                            coreQuantumRemaining[core]->store(remaining - 1);
-                        }
-                    }
-
+                    // Handle sleep
                     if (process->getSleepTicks() > 0) {
                         {
                             std::lock_guard<std::mutex> lock(queueMutex);
@@ -270,21 +318,29 @@ void Scheduler::workerLoop(int core) {
                         coreQuantumRemaining[core]->store(0);
                         continue;
                     }
-
                     std::string result = process->executeNextInstruction();
+                    if (algorithm == SchedulingAlgorithm::ROUND_ROBIN) {
+                        int remaining = coreQuantumRemaining[core]->load();
+                        if (remaining > 0) {
+                            coreQuantumRemaining[core]->store(remaining - 1);
+                        }
+                    }
 
                     if (delayPerExec > 0) {
                         std::this_thread::sleep_for(std::chrono::milliseconds(delayPerExec));
                     }
                 } else {
                     processManager.assignProcessToCore(pid, -1);
+                    extern FirstFitMemoryAllocator* globalMemoryAllocator;
+                    if (globalMemoryAllocator && globalMemoryAllocator->isAllocated(pid)) {
+                        globalMemoryAllocator->release(pid);
+                    }
                     coreBusy[core]->store(false);
                     coreProcess[core]->store(-1);
                     coreQuantumRemaining[core]->store(0);
                 }
             }
         }
-        checkWaitingQueue();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

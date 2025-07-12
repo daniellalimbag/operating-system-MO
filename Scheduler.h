@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <queue>
 #include <thread>
 #include <mutex>
@@ -13,6 +14,7 @@ extern std::atomic<uint64_t> cpuTickCount; // Global CPU tick counter
 #include <chrono>
 #include "ProcessManager.h"
 #include "Config.h"
+#include "FirstFitMemoryAllocator.h"
 
 enum class SchedulingAlgorithm {
     FCFS,
@@ -35,6 +37,11 @@ private:
     SystemConfig config;
     int numCores;
     std::vector<std::pair<int, int>> waitingQueue;
+    std::function<void(uint64_t)> memorySnapshotCallback;
+    std::atomic<int> quantumCycleCounter{0};
+    uint64_t lastSnapshotTick = 0;
+    int currentQuantumTick = 0;
+    bool finalSnapshotTaken = false;
 
     int quantumCycles;
     int delayPerExec;
@@ -45,6 +52,7 @@ private:
     int calculateCoreUtilization();
     void schedulerLoop();
     void workerLoop(int core);
+    void checkAndTakeSnapshot();
 
 public:
     Scheduler(ProcessManager& pm);
@@ -65,4 +73,5 @@ public:
     uint64_t getCurrentTick() const { return cpuTickCount.load(); }
     void checkWaitingQueue();
     void addToWaitingQueue(int pid, int sleepTicks);
+    void setMemorySnapshotCallback(std::function<void(uint64_t)> cb) { memorySnapshotCallback = std::move(cb); }
 };
