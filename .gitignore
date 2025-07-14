@@ -1,6 +1,8 @@
 # Ignore the compiled executable
 Main.exe
+Main
 csopesy
+csopesy.exe
 # Ignore the config file
 config.txt
 # Ignore all VSCode settings (optional)
