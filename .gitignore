@@ -3,12 +3,11 @@ Main.exe
 Main
 csopesy
 csopesy.exe
+bin/
 # Ignore the config file
 config.txt
 # Ignore all VSCode settings (optional)
 .vscode/
-.vscode/c_cpp_properties.json
-.vscode/tasks.json
 .git/
 ./memory_stamps
 csopesy.dSYM/
