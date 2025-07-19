@@ -1,22 +1,28 @@
 #include "Kernel.h"
-#include "Screen.h"
+#include <iostream>
+#include <limits>
 
-void Kernel::Run() {
-    bool running = true;
-    while (running) {
-        running = screen.Run();
-    }
+Kernel::Kernel() {
+    // In a real OS, this constructor would perform critical low-level tasks:
+    // - Initialize hardware (CPU, memory controller, timers, I/O devices).
+    // - Set up interrupt handlers.
+    // - Initialize memory management units.
+    // - Load initial system processes/drivers.
 }
 
-// The Singleton Get method definition (Meyers Singleton)
-Kernel& Kernel::Get() {
-    static Kernel instance; // The single instance is created here, on first call, thread-safely
-    return instance;
+void Kernel::print(const std::string& message) const {
+    std::cout << message;
 }
 
-Kernel::Kernel()
-{
+std::string Kernel::readLine(const std::string& prompt) const {
+    std::string inputLine;
+    this->print(prompt);
+    std::getline(std::cin, inputLine);
+
+    return inputLine;
 }
 
-Kernel::~Kernel() {
+void Kernel::clearScreen() const {
+    const std::string ANSI_CLEAR_SCREEN = "\033[2J\033[H";
+    std::cout << ANSI_CLEAR_SCREEN;
 }

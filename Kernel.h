@@ -1,18 +1,18 @@
 #pragma once
 
 #include <string>
-#include "Screen.h"
 
+/**
+ * @class Kernel
+ * @brief Core OS kernel responsible for OS management, and exposes public API for system interaction
+ */
+// Kernel.h
 class Kernel {
 public:
-    void Run();
-    static Kernel& Get();
-
-    Kernel(const Kernel&) = delete;
-    Kernel& operator=(const Kernel&) = delete;
-private:
     Kernel();
-    ~Kernel();
-private:
-    Screen screen;
+
+    // I/O APIs
+    void print(const std::string& message) const;
+    std::string readLine(const std::string& prompt) const;
+    void clearScreen() const;
 };
