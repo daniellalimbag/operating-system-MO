@@ -7,12 +7,32 @@
 Kernel::Kernel()
     : m_nextPid(0),
       m_cpuTicks(0ULL),
-      m_running(false) {}
+      m_running(false),
+      m_numCpus(4),
+      m_schedulerType(SchedulerType::ROUND_ROBIN),
+      m_quantumCycles(5),
+      m_batchProcessFreq(1),
+      m_minInstructions(1000),
+      m_maxInstructions(2000),
+      m_delaysPerExec(0),
+      m_maxOverallMem(64),
+      m_memPerFrame(16),
+      m_memPerProc(64) {}
 
 // Core Lifecycle Methods
-void Kernel::initialize() {
+void Kernel::initialize(const SystemConfig& config) {
     std::lock_guard<std::mutex> lock(m_kernelMutex); // This lock ensures that no other thread is modifying kernel state
-    m_running.store(true);
+    m_numCpus = config.numCPUs;
+    m_schedulerType = config.scheduler;
+    m_quantumCycles = config.quantumCycles;
+    m_batchProcessFreq = config.batchProcessFreq;
+    m_minInstructions = config.minInstructions;
+    m_maxInstructions = config.maxInstructions;
+    m_delaysPerExec = config.delaysPerExec;
+    m_maxOverallMem = config.maxOverallMem;
+    m_memPerFrame = config.memPerFrame;
+    m_memPerProc = config.memPerProc;
+
     std::cout << "Kernel: System initialization complete.\n";
 }
 

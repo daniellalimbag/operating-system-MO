@@ -5,8 +5,11 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
+#include <map>
+#include <cstdint>
 
 #include "Process.h"
+#include "SystemConfig.h"
 
 /**
  * @class Kernel
@@ -18,7 +21,7 @@ public:
     Kernel();
 
     // Core OS Lifecycle Methods
-    void initialize();
+    void initialize(const SystemConfig& config);
     void shutdown();
     void run();
 
@@ -43,9 +46,20 @@ private:
     mutable std::mutex m_kernelMutex;   // Mutex to protect access to Kernel's shared data members
     std::atomic<bool> m_running;        // Atomic flag to signal the kernel thread to stop
 
-    // Internal Kernel Operations (private methods for scheduling and clock)
-    void scheduleProcesses();   // Selects and runs a process
-    void advanceCpuTick();      // Increments the internal CPU tick counter
+    // Configuration Parameters
+    uint32_t m_numCpus;
+    SchedulerType m_schedulerType;
+    uint32_t m_quantumCycles;
+    uint32_t m_batchProcessFreq;
+    uint32_t m_minInstructions;
+    uint32_t m_maxInstructions;
+    uint32_t m_delaysPerExec;
+    uint32_t m_maxOverallMem;
+    uint32_t m_memPerFrame;
+    uint32_t m_memPerProc;
 
-    Process* findProcessByPid(int pid) const; // Private helper method to find a process by its PID
+    // Internal Kernel Operations
+    void scheduleProcesses();                   // Selects and runs a process
+    void advanceCpuTick();                      // Increments the internal CPU tick counter
+    Process* findProcessByPid(int pid) const;   // Private helper method to find a process by its PID
 };
