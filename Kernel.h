@@ -27,8 +27,12 @@ public:
 
     // Process Management
     int createProcess(const std::vector<ProcessInstruction>& instructions);
-    int getProcessCurrentInstructionLine(int pid) const;
-    int getProcessTotalInstructionLines(int pid) const;
+    //int getProcessCurrentInstructionLine(int pid) const;
+    //int getProcessTotalInstructionLines(int pid) const;
+
+    // Process Generation Control
+    void startProcessGeneration();
+    void stopProcessGeneration();
 
     // System Clock & Time
     unsigned long long getCurrentCpuTick() const;
@@ -59,7 +63,8 @@ private:
     uint32_t m_memPerProc;
 
     // Internal Kernel Operations
-    void scheduleProcesses();                   // Selects and runs a process
     void advanceCpuTick();                      // Increments the internal CPU tick counter
+    void scheduleProcesses();                   // Selects and runs a process
     Process* findProcessByPid(int pid) const;   // Private helper method to find a process by its PID
+    void generateDummyProcess();                // Dummy Process Generation helper
 };

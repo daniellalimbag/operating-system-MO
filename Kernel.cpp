@@ -8,16 +8,16 @@ Kernel::Kernel()
     : m_nextPid(0),
       m_cpuTicks(0ULL),
       m_running(false),
-      m_numCpus(4),
+      m_numCpus(4U),
       m_schedulerType(SchedulerType::ROUND_ROBIN),
-      m_quantumCycles(5),
-      m_batchProcessFreq(1),
-      m_minInstructions(1000),
-      m_maxInstructions(2000),
-      m_delaysPerExec(0),
-      m_maxOverallMem(64),
-      m_memPerFrame(16),
-      m_memPerProc(64) {}
+      m_quantumCycles(5U),
+      m_batchProcessFreq(1U),
+      m_minInstructions(1000U),
+      m_maxInstructions(2000U),
+      m_delaysPerExec(0U),
+      m_maxOverallMem(64U),
+      m_memPerFrame(16U),
+      m_memPerProc(64U) {}
 
 // Core Lifecycle Methods
 void Kernel::initialize(const SystemConfig& config) {
@@ -72,6 +72,7 @@ int Kernel::createProcess(const std::vector<ProcessInstruction>& instructions) {
     return newPid;
 }
 
+/*
 int Kernel::getProcessCurrentInstructionLine(int pid) const {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
     Process* p = findProcessByPid(pid);
@@ -80,7 +81,9 @@ int Kernel::getProcessCurrentInstructionLine(int pid) const {
     }
     return -1; // Return -1 if PID not found or process is invalid
 }
+*/
 
+/*
 int Kernel::getProcessTotalInstructionLines(int pid) const {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
     Process* p = findProcessByPid(pid);
@@ -89,6 +92,7 @@ int Kernel::getProcessTotalInstructionLines(int pid) const {
     }
     return -1; // Return -1 if PID not found or process is invalid
 }
+*/
 
 // System Clock & Time Methods
 unsigned long long Kernel::getCurrentCpuTick() const {
