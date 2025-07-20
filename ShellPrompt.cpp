@@ -33,6 +33,7 @@ void ShellPrompt::start() {
 
         if (initial_command == "initialize") {
             kernel.print("Initializing main OS shell...\n");
+            kernel.initialize();
             break;
         } else if (initial_command == "exit") {
             kernel.print("OS shutdown initiated from boot prompt.\n");
@@ -70,8 +71,8 @@ void ShellPrompt::processCommand(const std::string& command) {
         showHelp();
     } else if (command == "echo") {
         kernel.print("Echo command received. (Arguments not yet parsed)\n");
-    } else if (command == "clear") { // Clear screen command
-        kernel.clearScreen(); // Call kernel's new clearScreen function
+    } else if (command == "clear") {
+        kernel.clearScreen();
     }
     // else if (command == "ps") { /* Call kernel.getAllProcessesStatus() */ }
     // else if (command == "mem_usage") { /* Call kernel.getMemoryUtilizationReport() */ }

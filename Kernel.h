@@ -1,6 +1,12 @@
 #pragma once
 
 #include <string>
+#include <vector>
+#include <memory>
+#include <mutex>
+#include <atomic>
+
+#include "Process.h"
 
 /**
  * @class Kernel
@@ -11,8 +17,35 @@ class Kernel {
 public:
     Kernel();
 
+    // Core OS Lifecycle Methods
+    void initialize();
+    void shutdown();
+    void run();
+
+    // Process Management
+    int createProcess(const std::vector<ProcessInstruction>& instructions);
+    int getProcessCurrentInstructionLine(int pid) const;
+    int getProcessTotalInstructionLines(int pid) const;
+
+    // System Clock & Time
+    unsigned long long getCurrentCpuTick() const;
+
     // I/O APIs
     void print(const std::string& message) const;
     std::string readLine(const std::string& prompt) const;
     void clearScreen() const;
+
+private:
+    std::vector<std::unique_ptr<Process>> m_processes;  // Stores all processes managed by the kernel
+    int m_nextPid;                                      // Counter for assigning unique PIDs
+    unsigned long long m_cpuTicks;                      // Represents the system's conceptual time progression
+
+    mutable std::mutex m_kernelMutex;   // Mutex to protect access to Kernel's shared data members
+    std::atomic<bool> m_running;        // Atomic flag to signal the kernel thread to stop
+
+    // Internal Kernel Operations (private methods for scheduling and clock)
+    void scheduleProcesses();   // Selects and runs a process
+    void advanceCpuTick();      // Increments the internal CPU tick counter
+
+    Process* findProcessByPid(int pid) const; // Private helper method to find a process by its PID
 };
