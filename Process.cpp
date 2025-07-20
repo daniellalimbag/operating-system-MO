@@ -11,6 +11,8 @@
 namespace {
 
     void executeSingleInstruction(const ProcessInstruction& instruction, Process& process, Kernel& kernel) {
+        // Mark kernel as unused to suppress the warning/error for now
+        (void)kernel;
         // For now, ProcessInstruction is very simple, so we just print its original_line.
         std::cout << "[Process " << process.getPid() << " - Internal Handler] Executing: " << instruction.original_line << std::endl;
 

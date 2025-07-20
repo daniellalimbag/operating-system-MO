@@ -69,10 +69,10 @@ private:
 
     // Control Flow Variables
     ProcessState m_currentState;
-    std::vector<ProcessInstruction> m_instructions;   // The list of commands for this process
-    int m_programCounter;                            // Index of the next instruction to execute
+    std::vector<ProcessInstruction> m_instructions;     // The list of commands for this process
+    size_t m_programCounter;                            // Index of the next instruction to execute
 
     // Life-Cycle Timestamps
-    std::chrono::system_clock::time_point m_creationTime;    // When the process was created
+    std::chrono::system_clock::time_point m_creationTime;   // When the process was created
     std::chrono::system_clock::time_point m_wakeUpTime;     // Used specifically for SLEEP instruction (placeholder for now)
 };
