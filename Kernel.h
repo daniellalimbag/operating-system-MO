@@ -10,6 +10,7 @@
 
 #include "Process.h"
 #include "SystemConfig.h"
+#include "ProcessInstruction.h"
 
 /**
  * @class Kernel
@@ -26,7 +27,7 @@ public:
     void run();
 
     // Process Management
-    int createProcess(const std::vector<ProcessInstruction>& instructions);
+    int createProcess(std::vector<std::unique_ptr<IProcessInstruction>> instructions);
     //int getProcessCurrentInstructionLine(int pid) const;
     //int getProcessTotalInstructionLines(int pid) const;
 

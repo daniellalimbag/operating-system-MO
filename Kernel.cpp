@@ -55,16 +55,16 @@ void Kernel::run() {
             scheduleProcesses();
         }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 
 // Process Management Methods
-int Kernel::createProcess(const std::vector<ProcessInstruction>& instructions) {
+int Kernel::createProcess(std::vector<std::unique_ptr<IProcessInstruction>> instructions) {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
 
     int newPid = m_nextPid++;
-    auto newProcess = std::make_unique<Process>(newPid, instructions);
+    auto newProcess = std::make_unique<Process>(newPid, std::move(instructions));
     newProcess->setState(ProcessState::READY);
     m_processes.push_back(std::move(newProcess));
 
@@ -143,7 +143,7 @@ void Kernel::scheduleProcesses() {
     for (const auto& process_ptr : m_processes) {
         if (process_ptr->getState() == ProcessState::READY) {
             process_ptr->setState(ProcessState::RUNNING); // Mark as running
-            process_ptr->executeNextInstruction(*this);   // Execute one instruction
+            process_ptr->executeNextInstruction();   // Execute one instruction
 
             // If the process is not yet terminated, put it back to READY or WAITING
             if (process_ptr->getState() == ProcessState::RUNNING) { // Still running after instruction

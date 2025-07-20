@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <map>
+
+#include "ProcessInstruction.h"
 
 class Kernel;
 
@@ -20,14 +23,22 @@ enum class ProcessState {
 };
 
 /**
- * @struct ProcessInstruction
- * @brief Placeholder for a single instruction that a process can execute.
- * Detailed instruction types and arguments will be added later.
+ * @struct LoopContext
+ * @brief Holds the contextual information for an active FOR loop within a process.
  */
-struct ProcessInstruction {
-    std::string original_line; // A simple string to represent the instruction for now. This will be replaced by enums, specific arguments, etc., later.
+struct LoopContext {
+    size_t currentInstructionIndexInBody; // Current index within the loop's own instruction vector (ForInstruction::getBody())
+    int currentIteration;              // The current iteration (0 to repeats-1)
+    int totalRepeats;                     // Total number of repetitions for this loop
+    const ForInstruction* forInstructionPtr; // Pointer to the actual ForInstruction object to access its body
 
-    ProcessInstruction(const std::string& line = "GENERIC_INSTRUCTION") : original_line(line) {}
+    /**
+     * @brief Constructor for LoopContext.
+     * @param repeats The total number of repetitions for this loop.
+     * @param forInstr A pointer to the ForInstruction object that initiated this loop.
+     */
+    LoopContext(int repeats, const ForInstruction* forInstr)
+        : currentInstructionIndexInBody(0UL), currentIteration(0), totalRepeats(repeats), forInstructionPtr(forInstr) {}
 };
 
 /**
@@ -38,22 +49,31 @@ struct ProcessInstruction {
  */
 class Process {
 public: // Public interface for Kernel interaction
-    Process(int id, const std::vector<ProcessInstruction>& cmds);
+    Process(int id, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds);
 
     // Core Lifecycle & Execution Methods
     void setState(ProcessState newState);
     bool isFinished() const;
-    void executeNextInstruction(Kernel& kernel);
+    void executeNextInstruction();
 
     // Public Getters for Read-Only Information
     int getPid() const { return m_pid; }
     ProcessState getState() const { return m_currentState; }
     std::chrono::system_clock::time_point getCreationTime() const { return m_creationTime; }
-    std::chrono::system_clock::time_point getWakeUpTime() const { return m_wakeUpTime; }
+    uint8_t getSleepTicksRemaining() const { return m_sleepTicksRemaining; }
+    size_t getCurrentInstructionLine() const; // Returns absolute line number or line in current loop body
+    size_t getTotalInstructionLines() const;  // Returns total lines or loop body size if in loop
 
-    // Information for "screen" command
-    int getCurrentInstructionLine() const { return m_programCounter; }
-    int getTotalInstructionLines() const { return m_instructions.size(); }
+    void decrementSleepTicks() { if (m_sleepTicksRemaining > 0) m_sleepTicksRemaining--; }
+    void setSleepTicks(uint8_t ticks);
+    void declareVariable(const std::string& varName, uint16_t value);
+    uint16_t getVariableValue(const std::string& operand);
+    void setVariableValue(const std::string& varName, uint16_t value);
+    uint16_t clampUint16(int value);
+    void addToLog(const std::string& message);
+    const std::vector<std::string>& getLogBuffer() const { return m_logBuffer; }
+    void pushLoopContext(const ForInstruction* forInstr);
+    const std::vector<LoopContext>& getLoopStack() const { return m_loopStack; }
 
     // =====================================================================
     // Specialized helper objects (e.g., SymbolTable, ProcessLogger)
@@ -69,10 +89,15 @@ private:
 
     // Control Flow Variables
     ProcessState m_currentState;
-    std::vector<ProcessInstruction> m_instructions;     // The list of commands for this process
-    size_t m_programCounter;                            // Index of the next instruction to execute
+    std::vector<std::unique_ptr<IProcessInstruction>> m_instructions;   // The list of commands for this process
+    size_t m_programCounter;                                            // Index of the next instruction to execute
 
-    // Life-Cycle Timestamps
     std::chrono::system_clock::time_point m_creationTime;   // When the process was created
-    std::chrono::system_clock::time_point m_wakeUpTime;     // Used specifically for SLEEP instruction (placeholder for now)
+
+    uint8_t m_sleepTicksRemaining;                          // Used specifically for SLEEP instruction
+
+    // Process-specific data
+    std::map<std::string, uint16_t> m_variables; // For process's local variables
+    std::vector<std::string> m_logBuffer;       // For process's screen output (PRINT statements)
+    std::vector<LoopContext> m_loopStack;       // For FOR loop management
 };
