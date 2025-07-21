@@ -13,6 +13,16 @@
 #include "ProcessInstruction.h"
 
 /**
+ * @struct CPUCore
+ * @brief Represents a single CPU core in the emulator.
+ */
+struct CPUCore {
+    int id; // Unique identifier for the core (e.g., 0, 1, 2...)
+    Process* currentProcess; // Pointer to the process currently running on this core
+    bool isBusy;             // True if the core is currently executing a process
+};
+
+/**
  * @class Kernel
  * @brief Core OS kernel responsible for OS management, and exposes public API for system interaction
  */
@@ -65,6 +75,8 @@ private:
     uint32_t m_maxOverallMem;
     uint32_t m_memPerFrame;
     uint32_t m_memPerProc;
+
+    std::vector<CPUCore> m_cpuCores;        // Virtual representation of CPU cores
 
     // Internal Kernel Operations
     void scheduleProcesses();                                           // Selects and runs a process

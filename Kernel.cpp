@@ -36,7 +36,21 @@ void Kernel::initialize(const SystemConfig& config) {
     m_memPerFrame = config.memPerFrame;
     m_memPerProc = config.memPerProc;
 
-    std::cout << "Kernel: System initialization complete.\n";
+    // --- Initialize CPU Cores ---
+    m_cpuCores.clear(); // Clear any existing cores
+    m_cpuCores.resize(m_numCpus); // Create the specified number of cores
+    for (uint32_t i = 0; i < m_numCpus; ++i) {
+        m_cpuCores[i].id = i;
+        m_cpuCores[i].currentProcess = nullptr; // No process initially assigned
+        m_cpuCores[i].isBusy = false;
+    }
+
+    std::cout << "Kernel: Kernel initialized with " << m_numCpus << " CPU cores.\n";
+    /*
+    for (const auto& core: m_cpuCores) {
+        std::cout << "Core " << core.id << "\n";
+    }
+    */
 }
 
 void Kernel::shutdown() {
@@ -229,6 +243,10 @@ void Kernel::stopProcessGeneration() {
 // Screen Commands
 void Kernel::listStatus() {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
+    if (m_processes.size() == 0) {
+        std::cout << "No processes found." << "\n";
+        return;
+    }
     std::cout << "Processes:\n";
     for(const auto& process : m_processes) {
         std::cout << process->getPname() << ": (" << process->getCreationTime() << ") " << process->getCurrentInstructionLine() << "/" <<process->getTotalInstructionLines() << "\n";

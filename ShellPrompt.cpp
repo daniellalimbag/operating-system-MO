@@ -39,7 +39,7 @@ void ShellPrompt::start() {
             SystemConfig loadedConfig;
             bool configLoaded = readConfigFromFile("config.txt", loadedConfig, kernel);
             if (configLoaded) {
-                kernel.print("Configuration loaded successfully.\n");
+                kernel.print("Configuration loaded successfully. Sending to kernel...\n");
                 kernel.initialize(loadedConfig);
             } else {
                 kernel.print("Configuration loading failed or had errors. Using default values for unconfigured/invalid parameters.\n");
