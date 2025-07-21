@@ -12,10 +12,7 @@ Process::Process(int id, std::vector<std::unique_ptr<IProcessInstruction>>&& cmd
       m_instructions(std::move(cmds)),
       m_programCounter(0UL),
       m_creationTime(std::chrono::system_clock::now()),
-      m_sleepTicksRemaining(0U)
-{
-    std::cout << "[Process " << getPid() << "] Created. State: NEW. Instruction Count: " << m_instructions.size() << "\n";
-}
+      m_sleepTicksRemaining(0U) {}
 
 void Process::setState(ProcessState newState) {
     m_currentState = newState;

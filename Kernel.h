@@ -48,8 +48,10 @@ private:
     int m_nextPid;                                      // Counter for assigning unique PIDs
     unsigned long long m_cpuTicks;                      // Represents the system's conceptual time progression
 
-    mutable std::mutex m_kernelMutex;   // Mutex to protect access to Kernel's shared data members
-    std::atomic<bool> m_running;        // Atomic flag to signal the kernel thread to stop
+    mutable std::mutex m_kernelMutex;           // Mutex to protect access to Kernel's shared data members
+    std::atomic<bool> m_running;                // Atomic flag to signal the kernel thread to stop
+    std::atomic<bool> m_shutdownRequested;      // Atomic flag to signal that a shutdown has been requested
+    std::condition_variable m_cv;               // Condition variable for signaling idle/active state
 
     // Configuration Parameters
     uint32_t m_numCpus;
@@ -64,8 +66,6 @@ private:
     uint32_t m_memPerProc;
 
     // Internal Kernel Operations
-    void advanceCpuTick();                      // Increments the internal CPU tick counter
     void scheduleProcesses();                   // Selects and runs a process
-    Process* findProcessByPid(int pid) const;   // Private helper method to find a process by its PID
     void generateDummyProcess();                // Dummy Process Generation helper
 };

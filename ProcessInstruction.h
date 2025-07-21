@@ -106,6 +106,7 @@ public:
     // Getters for Process to access loop details
     const std::vector<std::unique_ptr<IProcessInstruction>>& getBody() const { return instructions_body; }
     int getRepeatCount() const { return repeats; }
+    InstructionType getType() const override { return InstructionType::FOR; }
 };
 
 /**

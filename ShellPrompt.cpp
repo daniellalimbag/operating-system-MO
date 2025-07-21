@@ -83,9 +83,13 @@ void ShellPrompt::processCommand(const std::string& command) {
         kernel.print("Echo command received. (Arguments not yet parsed)\n");
     } else if (command == "clear") {
         kernel.clearScreen();
+    } else if (command == "scheduler-start") {
+        kernel.startProcessGeneration();
+    } else if (command == "scheduler-stop") {
+        kernel.stopProcessGeneration();
     }
-    // else if (command == "ps") { /* Call kernel.getAllProcessesStatus() */ }
-    // else if (command == "mem_usage") { /* Call kernel.getMemoryUtilizationReport() */ }
+    // else if (command == "screen -ls") { /* Call kernel.getAllProcessesStatus() */ }
+    // else if (command == "process-smi") { /* Call kernel.getMemoryUtilizationReport() */ }
     else {
         kernel.print("Unknown command: '" + command + "'. Type 'help' for assistance.\n");
     }
@@ -97,5 +101,7 @@ void ShellPrompt::showHelp() const {
     kernel.print("help     - Displays this help message.\n");
     kernel.print("echo     - A simple placeholder command.\n");
     kernel.print("clear    - Clears the terminal screen.\n");
+    kernel.print("scheduler-start - Starts automatic process generation.\n");
+    kernel.print("scheduler-stop  - Stops automatic process generation.\n");
     kernel.print("--------------------------\n\n");
 }
