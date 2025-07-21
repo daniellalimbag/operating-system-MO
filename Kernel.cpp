@@ -85,6 +85,7 @@ void Kernel::run() {
                 int newPid = m_nextPid++;                                           // Get next available PID and increment
                 std::string newPname = "process" + std::to_string(newPid);
                 Process* newProcess = generateDummyProcess(newPname, newPid);
+                newProcess->setState(ProcessState::READY);
                 m_readyQueue.push(newProcess);
             }
         }
@@ -103,7 +104,8 @@ void Kernel::run() {
                     if (p->getState() == ProcessState::WAITING) {
                         core.currentProcess = nullptr;              // Core is now free
                         core.isBusy = false;
-                        m_readyQueue.push(p);                       // Process is pushed back to ready queue
+                        p->setState(ProcessState::WAITING);
+                        m_waitingProcesses.push_back(p);                       // Process is pushed back to ready queue
                     }
                 }
             }
@@ -309,7 +311,9 @@ void Kernel::scheduleProcesses() {
                 core.isBusy = true;                                 // Mark it as busy
                 p_to_schedule->setState(ProcessState::RUNNING);     // Set process as running so it can execute
 
+                /*
                 std::cout << "[Scheduler] Assigned Process " << p_to_schedule->getPname() << " (PID " << p_to_schedule->getPid() << ") to Core " << core.id << ".\n";
+                */
             }
         }
     }
@@ -319,12 +323,16 @@ void Kernel::updateWaitingProcesses() {
     for (auto& process : m_processes) {
         if (process->getState() == ProcessState::WAITING) {
             process->decrementSleepTicks();
+            if (process->getSleepTicksRemaining() == 0) {
+                process->setState(ProcessState::READY);
+                m_readyQueue.push(process.get());
+            }
         }
     }
 }
 
 bool Kernel::isBusy() {
-    if (m_readyQueue.size() > 0) {
+    if (!m_readyQueue.empty() || !m_waitingProcesses.empty()) { // Check if either ready queue or waiting processes has items
         return true;
     }
     for (auto& core : m_cpuCores) {
