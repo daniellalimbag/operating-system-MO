@@ -276,9 +276,41 @@ void Kernel::listStatus() {
         std::cout << "No processes found." << "\n";
         return;
     }
-    std::cout << "Processes:\n";
-    for(const auto& process : m_processes) {
-        std::cout << process->getPname() << ": (" << process->getCreationTime() << ") " << process->getCurrentInstructionLine() << "/" <<process->getTotalInstructionLines() << "\n";
+
+    std::cout << "Active Processes:\n";
+    for (const auto& p_ptr : m_processes) {
+        if(p_ptr->getState() == ProcessState::TERMINATED)
+            continue;
+        std::cout << "  " << p_ptr->getPname() << " (PID " << p_ptr->getPid() << ")"
+                    << " (" << p_ptr->getCreationTime() << ")"
+                    << " State: " << (p_ptr->getState() == ProcessState::NEW ? "NEW" :
+                                        p_ptr->getState() == ProcessState::READY ? "READY" :
+                                        p_ptr->getState() == ProcessState::RUNNING ? "RUNNING" :
+                                        p_ptr->getState() == ProcessState::WAITING ? "WAITING" :
+                                        p_ptr->getState() == ProcessState::TERMINATED ? "TERMINATED" : "UNKNOWN")
+                    << " Inst: " << p_ptr->getCurrentInstructionLine()
+                    << "/" << p_ptr->getTotalInstructionLines();
+        if (p_ptr->getSleepTicksRemaining() > 0) {
+            std::cout << " (Sleeping " << (int)p_ptr->getSleepTicksRemaining() << " ticks)";
+        }
+        std::cout << "\n";
+    }
+    std::cout << "Terminated Processes:\n";
+    for (const auto& p_ptr : m_processes) {
+        if(p_ptr->getState() != ProcessState::TERMINATED)
+            continue;
+        std::cout << "  Process " << p_ptr->getPname() << " (PID " << p_ptr->getPid() << ")"
+                    << " State: " << (p_ptr->getState() == ProcessState::NEW ? "NEW" :
+                                        p_ptr->getState() == ProcessState::READY ? "READY" :
+                                        p_ptr->getState() == ProcessState::RUNNING ? "RUNNING" :
+                                        p_ptr->getState() == ProcessState::WAITING ? "WAITING" :
+                                        p_ptr->getState() == ProcessState::TERMINATED ? "TERMINATED" : "UNKNOWN")
+                    << " Inst: " << p_ptr->getCurrentInstructionLine()
+                    << "/" << p_ptr->getTotalInstructionLines();
+        if (p_ptr->getSleepTicksRemaining() > 0) {
+            std::cout << " (Sleeping " << (int)p_ptr->getSleepTicksRemaining() << " ticks)";
+        }
+        std::cout << "\n";
     }
 }
 

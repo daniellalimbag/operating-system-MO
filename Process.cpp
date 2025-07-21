@@ -36,9 +36,12 @@ void Process::setSleepTicks(uint8_t ticks) {
 
 void Process::executeNextInstruction() {
     if (m_currentState != ProcessState::RUNNING) {
-        std::cerr << "Error: Process " << getPid() << " attempted to execute while not RUNNING. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << "\n";
+        std::cerr << "Error: Process " << getPid() << " attempted to execute while not RUNNING. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << " " << m_programCounter << "/" << m_instructions.size() << "\n";
         return;
     }
+    /*
+    std::cout << "Process " << getPid() << " executing. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << " " << m_programCounter << "/" << m_instructions.size() << "\n";
+    */
 
     if (!m_loopStack.empty()) {
         LoopContext& currentLoop = m_loopStack.back();
@@ -90,11 +93,13 @@ void Process::executeNextInstruction() {
 
         } else {
             setState(ProcessState::TERMINATED);
+            setSleepTicks(0);
             std::cout << "[Process " << getPid() << "] All main instructions executed. Transitioning to TERMINATED.\n";
         }
     }
 
     if (m_programCounter >= m_instructions.size() && m_loopStack.empty()) {
+        setSleepTicks(0);
         setState(ProcessState::TERMINATED);
     }
 }
