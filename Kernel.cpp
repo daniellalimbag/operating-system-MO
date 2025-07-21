@@ -4,6 +4,7 @@
 #include <chrono>
 #include <algorithm>
 #include <random>
+#include <limits>
 
 Kernel::Kernel()
     : m_nextPid(0),
@@ -56,7 +57,7 @@ void Kernel::run() {
 
         // If nothing to do (no new processes to generate, no existing processes to schedule)
         // AND not in the final shutdown phase, then wait.
-        if (!m_running && m_processes.empty() && !m_shutdownRequested) {
+        if (!m_running && m_processes.empty()) {
             m_cv.wait(lock); // Atomically releases the lock and waits. Reacquires lock on wake-up.
         }
 
@@ -68,10 +69,12 @@ void Kernel::run() {
         // Process Generation Logic: Only generate if m_running is true
         if (m_running) {
             if (m_cpuTicks % m_batchProcessFreq == 0) {
-                generateDummyProcess();
+                int newPid = m_nextPid++; // Get next available PID and increment
+                std::string newPname = "process" + std::to_string(newPid);
+                generateDummyProcess(newPname, newPid);
             }
             if (m_cpuTicks % m_delaysPerExec == 0) {
-                scheduleProcesses();
+                //scheduleProcesses();
             }
             m_cpuTicks++;
         }
@@ -79,11 +82,13 @@ void Kernel::run() {
         lock.unlock(); // Release the lock before sleeping
 
         // Small sleep to prevent busy-waiting.
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
 
-void Kernel::generateDummyProcess() {
+// Dummy Process Generator
+void Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
+    // No need for mutex because it's only called within run()
     // Use a random number generator
     // static ensures the generator is initialized only once per program run
     static std::random_device rd;
@@ -101,13 +106,14 @@ void Kernel::generateDummyProcess() {
     size_t numInstructions = distrib_num_instructions(gen);
 
     std::vector<std::unique_ptr<IProcessInstruction>> instructions;
+    instructions.reserve(numInstructions);
 
     // A list of possible variable names to use in dummy processes
     const std::vector<std::string> varNames = {"a", "b", "c", "x", "y", "counter", "temp"};
-    // A distribution for random values (0-255 for uint16_t)
-    std::uniform_int_distribution<uint16_t> distrib_value(0, 255);
-    // A distribution for sleep ticks (e.g., 1 to 5 ticks)
-    std::uniform_int_distribution<uint8_t> distrib_sleep_ticks(1, 5);
+    // A distribution for random values (0-65,535 for uint16_t)
+    std::uniform_int_distribution<uint16_t> distrib_value(std::numeric_limits<uint16_t>::min(), std::numeric_limits<uint16_t>::max());
+    // A distribution for sleep ticks (e.g., 1 to 255 ticks for uint8_t)
+    std::uniform_int_distribution<uint8_t> distrib_sleep_ticks(1, 255);
     // A distribution for loop repeats (e.g., 1 to 3 repeats)
     std::uniform_int_distribution<int> distrib_loop_repeats(1, 3);
 
@@ -116,7 +122,8 @@ void Kernel::generateDummyProcess() {
     enum class DummyInstructionType {
         ADD, SUBTRACT, SLEEP, FOR, PRINT, DECLARE
     };
-    std::uniform_int_distribution<> distrib_instr_type(0, static_cast<int>(DummyInstructionType::DECLARE));
+    // A distribution for instruction types (e.g., ADD to DECLARE)
+    std::uniform_int_distribution<> distrib_instr_type(static_cast<int>(DummyInstructionType::ADD), static_cast<int>(DummyInstructionType::DECLARE));
 
     for (size_t i = 0; i < numInstructions; ++i) {
         DummyInstructionType instrType = static_cast<DummyInstructionType>(distrib_instr_type(gen));
@@ -171,18 +178,11 @@ void Kernel::generateDummyProcess() {
                     instructions.push_back(std::make_unique<ForInstruction>(
                         std::move(loopBody), distrib_loop_repeats(gen)
                     ));
-                } else {
-                    // If we can't create a FOR loop, create a simple PRINT instead
-                    instructions.push_back(std::make_unique<PrintInstruction>("(Fallback: Randomly generated simple print)"));
+                    break;
                 }
-                break;
+                // If we can't create a FOR loop, fall through the PRINT case instead.
             case DummyInstructionType::PRINT: {
-                std::string msg = "Generated print: ";
-                if (std::uniform_int_distribution<>(0, 2)(gen) == 0) { // 1/3 chance to print a variable
-                    msg += "+" + getRandomVarName();
-                } else {
-                    msg += "Hello from dummy process!";
-                }
+                std::string msg = "Hello world from " + newPname + "!";
                 instructions.push_back(std::make_unique<PrintInstruction>(msg));
                 break;
             }
@@ -194,18 +194,14 @@ void Kernel::generateDummyProcess() {
         }
     }
 
-    // Ensure there's at least one instruction if numInstructions ended up being 0 for some reason
-    if (instructions.empty()) {
-        instructions.push_back(std::make_unique<PrintInstruction>("Default (empty) dummy process."));
-    }
-
     // Create the process and add it to the kernel's process list
-    int newPid = m_nextPid++; // Get next available PID and increment
-    m_processes.push_back(std::make_unique<Process>(newPid, std::move(instructions)));
+    m_processes.push_back(std::make_unique<Process>(newPid, newPname, std::move(instructions)));
 
+    /*
     std::cout << "[Kernel] Generated dummy process with PID: " << newPid
               << ". Instructions: " << numInstructions
               << ". Total processes: " << m_processes.size() << "\n";
+    */
 }
 
 // Process Generation Control
@@ -227,6 +223,15 @@ void Kernel::stopProcessGeneration() {
         std::cout << "Kernel: Process generation deactivated.\n";
     } else {
         std::cout << "Kernel: Process generation is already inactive.\n";
+    }
+}
+
+// Screen Commands
+void Kernel::listStatus() {
+    std::lock_guard<std::mutex> lock(m_kernelMutex);
+    std::cout << "Processes:\n";
+    for(const auto& process : m_processes) {
+        std::cout << process->getPname() << ": (" << process->getCreationTime() << ") " << process->getCurrentInstructionLine() << "/" <<process->getTotalInstructionLines() << "\n";
     }
 }
 

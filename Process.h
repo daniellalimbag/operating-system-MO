@@ -49,7 +49,7 @@ struct LoopContext {
  */
 class Process {
 public: // Public interface for Kernel interaction
-    Process(int id, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds);
+    Process(int id, std::string processName, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds);
 
     // Core Lifecycle & Execution Methods
     void setState(ProcessState newState);
@@ -58,6 +58,7 @@ public: // Public interface for Kernel interaction
 
     // Public Getters for Read-Only Information
     int getPid() const { return m_pid; }
+    std::string getPname() const { return m_processName; }
     ProcessState getState() const { return m_currentState; }
     std::chrono::system_clock::time_point getCreationTime() const { return m_creationTime; }
     uint8_t getSleepTicksRemaining() const { return m_sleepTicksRemaining; }
@@ -86,6 +87,7 @@ public: // Public interface for Kernel interaction
     // =====================================================================
 private:
     int m_pid;
+    std::string m_processName;
 
     // Control Flow Variables
     ProcessState m_currentState;

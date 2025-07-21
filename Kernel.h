@@ -27,13 +27,14 @@ public:
     void run();
 
     // Process Management
-    int createProcess(std::vector<std::unique_ptr<IProcessInstruction>> instructions);
-    //int getProcessCurrentInstructionLine(int pid) const;
-    //int getProcessTotalInstructionLines(int pid) const;
+    // int createProcess(std::vector<std::unique_ptr<IProcessInstruction>> instructions);
 
     // Process Generation Control
-    void startProcessGeneration();
-    void stopProcessGeneration();
+    void startProcessGeneration();      // scheduler-start
+    void stopProcessGeneration();       // scheduler-stop
+
+    // Screen Commands
+    void listStatus();                  // screen -ls
 
     // System Clock & Time
     unsigned long long getCurrentCpuTick() const;
@@ -66,6 +67,6 @@ private:
     uint32_t m_memPerProc;
 
     // Internal Kernel Operations
-    void scheduleProcesses();                   // Selects and runs a process
-    void generateDummyProcess();                // Dummy Process Generation helper
+    void scheduleProcesses();                                           // Selects and runs a process
+    void generateDummyProcess(const std::string& newPname, int newPid); // Dummy Process Generation helper
 };

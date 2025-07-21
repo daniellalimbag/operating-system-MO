@@ -6,8 +6,9 @@
 #include <limits>
 #include <algorithm>
 
-Process::Process(int id, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds)
+Process::Process(int id, std::string processName, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds)
     : m_pid(id),
+      m_processName(processName),
       m_currentState(ProcessState::NEW),
       m_instructions(std::move(cmds)),
       m_programCounter(0UL),

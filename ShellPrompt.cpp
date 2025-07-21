@@ -87,6 +87,8 @@ void ShellPrompt::processCommand(const std::string& command) {
         kernel.startProcessGeneration();
     } else if (command == "scheduler-stop") {
         kernel.stopProcessGeneration();
+    } else if (command == "screen -ls") {
+        kernel.listStatus();
     }
     // else if (command == "screen -ls") { /* Call kernel.getAllProcessesStatus() */ }
     // else if (command == "process-smi") { /* Call kernel.getMemoryUtilizationReport() */ }
@@ -97,11 +99,12 @@ void ShellPrompt::processCommand(const std::string& command) {
 
 void ShellPrompt::showHelp() const {
     kernel.print("\n--- Available Commands ---\n");
-    kernel.print("exit     - Quits the main OS shell.\n");
-    kernel.print("help     - Displays this help message.\n");
-    kernel.print("echo     - A simple placeholder command.\n");
-    kernel.print("clear    - Clears the terminal screen.\n");
-    kernel.print("scheduler-start - Starts automatic process generation.\n");
-    kernel.print("scheduler-stop  - Stops automatic process generation.\n");
+    kernel.print("exit             - Quits the main OS shell.\n");
+    kernel.print("help             - Displays this help message.\n");
+    kernel.print("echo             - A simple placeholder command.\n");
+    kernel.print("clear            - Clears the terminal screen.\n");
+    kernel.print("scheduler-start  - Starts automatic process generation.\n");
+    kernel.print("scheduler-stop   - Stops automatic process generation.\n");
+    kernel.print("screen -ls       - Lists CPU utilization, core usage, and a summary of all running and finished processes");
     kernel.print("--------------------------\n\n");
 }
