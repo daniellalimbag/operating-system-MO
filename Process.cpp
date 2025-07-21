@@ -36,7 +36,7 @@ void Process::setSleepTicks(uint8_t ticks) {
 
 void Process::executeNextInstruction() {
     if (m_currentState != ProcessState::RUNNING) {
-        std::cerr << "Error: Process " << getPid() << " attempted to execute while not RUNNING. Current State: " << static_cast<int>(m_currentState) << "\n";
+        std::cerr << "Error: Process " << getPid() << " attempted to execute while not RUNNING. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << "\n";
         return;
     }
 
@@ -70,6 +70,8 @@ void Process::executeNextInstruction() {
     } else {
         if (m_programCounter < m_instructions.size()) {
             const std::unique_ptr<IProcessInstruction>& current_instruction = m_instructions[m_programCounter];
+
+            std::cout << m_processName << ": Executing instruction type: " << static_cast<int>(current_instruction->getType()) << " Line: " << static_cast<int>(m_programCounter) << "\n";
 
             if (current_instruction->getType() == InstructionType::FOR) {
                 current_instruction->execute(*this);

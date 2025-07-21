@@ -7,6 +7,7 @@
 #include <atomic>
 #include <map>
 #include <cstdint>
+#include <queue>
 
 #include "Process.h"
 #include "SystemConfig.h"
@@ -60,7 +61,7 @@ private:
     unsigned long long m_cpuTicks;                      // Represents the system's conceptual time progression
 
     mutable std::mutex m_kernelMutex;           // Mutex to protect access to Kernel's shared data members
-    std::atomic<bool> m_running;                // Atomic flag to signal the kernel thread to stop
+    std::atomic<bool> m_runningGeneration;      // Atomic flag to signal the kernel thread to stop generating dummy processes
     std::atomic<bool> m_shutdownRequested;      // Atomic flag to signal that a shutdown has been requested
     std::condition_variable m_cv;               // Condition variable for signaling idle/active state
 
@@ -77,8 +78,11 @@ private:
     uint32_t m_memPerProc;
 
     std::vector<CPUCore> m_cpuCores;        // Virtual representation of CPU cores
+    std::queue<Process*> m_readyQueue;      // Virtual representation of the ready queue for scheduling
 
     // Internal Kernel Operations
     void scheduleProcesses();                                               // Selects and runs a process
+    void updateWaitingProcesses();                                          // Update status of waiting processes (e.g., sleeping)
+    bool isBusy();                                                          // Checks if any core is busy or if there are still processes in the ready queue
     Process* generateDummyProcess(const std::string& newPname, int newPid); // Dummy Process Generation helper
 };

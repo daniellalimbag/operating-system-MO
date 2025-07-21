@@ -9,7 +9,7 @@
 Kernel::Kernel()
     : m_nextPid(0),
       m_cpuTicks(0ULL),
-      m_running(false),
+      m_runningGeneration(false),
       m_shutdownRequested(false),
       m_numCpus(4U),
       m_schedulerType(SchedulerType::ROUND_ROBIN),
@@ -57,7 +57,7 @@ void Kernel::shutdown() {
     {
         std::lock_guard<std::mutex> lock(m_kernelMutex);
         std::cout << "Kernel: Shutting down all processes and background services.\n";
-        m_running.store(false);             // Stop new process generation
+        m_runningGeneration.store(false);   // Stop new process generation
         m_shutdownRequested.store(true);    // Signal that shutdown has been requested
         m_processes.clear();
         std::cout << "Kernel: System shutdown complete.\n";
@@ -69,9 +69,9 @@ void Kernel::run() {
     while (true) {
         std::unique_lock<std::mutex> lock(m_kernelMutex);
 
-        // If nothing to do (no new processes to generate, no existing processes to schedule)
-        // AND not in the final shutdown phase, then wait.
-        if (!m_running && m_processes.empty()) {
+        // If nothing to do, then wait.
+        if (!isBusy() && !m_runningGeneration.load()) {
+            std::cout << "Kernel: No more pending processes! Waiting...\n";
             m_cv.wait(lock); // Atomically releases the lock and waits. Reacquires lock on wake-up.
         }
 
@@ -80,32 +80,42 @@ void Kernel::run() {
             break;
         }
 
-        if (m_running) { // m_running is for both process generation and process execution. So it only stops when both are finished/stopped.
-            if (m_cpuTicks % m_batchProcessFreq == 0) {                                 // Process Generation Logic: Only generate if m_running is true
-                int newPid = m_nextPid++; // Get next available PID and increment
+        if (m_runningGeneration.load()) {                                           // m_runningGeneration process generation
+            if (m_cpuTicks % m_batchProcessFreq == 0) {                             // Process Generation Logic: Only generate if m_running is true
+                int newPid = m_nextPid++;                                           // Get next available PID and increment
                 std::string newPname = "process" + std::to_string(newPid);
-                generateDummyProcess(newPname, newPid);
+                Process* newProcess = generateDummyProcess(newPname, newPid);
+                m_readyQueue.push(newProcess);
             }
-            if (m_cpuTicks % m_delaysPerExec == 0) {                                    // Cpu Core Process Execution
-                for (auto& core : m_cpuCores) {
-                    if (core.isBusy && core.currentProcess != nullptr) {
-                        Process* p = core.currentProcess;
-                        p->executeNextInstruction(); // A process can only be running if it's assigned to a core
-                        if (p->isFinished()) {
-                            core.currentProcess = nullptr; // Core is now free
-                            core.isBusy = false;
-                        }
+        }
+
+        updateWaitingProcesses();                                                   // Update status of waiting processes (e.g., sleeping)
+        scheduleProcesses();                                                        // CPU Process Scheduling
+        if (m_cpuTicks % (m_delaysPerExec + 1ULL) == 0) {                           // Cpu Core Process Execution
+            for (auto& core : m_cpuCores) {
+                if (core.isBusy && core.currentProcess != nullptr) {
+                    Process* p = core.currentProcess;
+                    p->executeNextInstruction(); // A process can only be running if it's assigned to a core
+                    if (p->isFinished()) {
+                        core.currentProcess = nullptr;              // Core is now free
+                        core.isBusy = false;
+                    }
+                    if (p->getState() == ProcessState::WAITING) {
+                        core.currentProcess = nullptr;              // Core is now free
+                        core.isBusy = false;
+                        m_readyQueue.push(p);                       // Process is pushed back to ready queue
                     }
                 }
             }
-            m_cpuTicks++;
         }
+        m_cpuTicks++;
 
         lock.unlock(); // Release the lock before sleeping
 
         // Small sleep to prevent busy-waiting.
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    std::cout << "Kernel: Got out of main loop.\n";
 }
 
 // Dummy Process Generator
@@ -238,8 +248,8 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
 // Process Generation Control
 void Kernel::startProcessGeneration() {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
-    if (!m_running) {
-        m_running.store(true);
+    if (!m_runningGeneration.load()) {
+        m_runningGeneration.store(true);
         std::cout << "Kernel: Process generation activated.\n";
         m_cv.notify_one(); // Wake up run() thread if it's waiting
     } else {
@@ -249,8 +259,8 @@ void Kernel::startProcessGeneration() {
 
 void Kernel::stopProcessGeneration() {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
-    if (m_running) {
-        m_running.store(false);
+    if (m_runningGeneration.load()) {
+        m_runningGeneration.store(false);
         std::cout << "Kernel: Process generation deactivated.\n";
     } else {
         std::cout << "Kernel: Process generation is already inactive.\n";
@@ -286,6 +296,43 @@ std::string Kernel::readLine(const std::string& prompt) const {
 void Kernel::clearScreen() const {
     const std::string ANSI_CLEAR_SCREEN = "\033[2J\033[H";
     std::cout << ANSI_CLEAR_SCREEN;
+}
+
+void Kernel::scheduleProcesses() {
+    if (m_schedulerType == SchedulerType::FCFS) {
+        for (auto& core : m_cpuCores) {                             // Iterate in order of the core id
+            if (!core.isBusy && !m_readyQueue.empty()) {            // If the core is idle AND there are processes waiting in the ready queue
+                Process* p_to_schedule = m_readyQueue.front();      // Get the front process (FCFS)
+                m_readyQueue.pop();                                 // Remove it from the queue
+
+                core.currentProcess = p_to_schedule;                // Assign the process to the core
+                core.isBusy = true;                                 // Mark it as busy
+                p_to_schedule->setState(ProcessState::RUNNING);     // Set process as running so it can execute
+
+                std::cout << "[Scheduler] Assigned Process " << p_to_schedule->getPname() << " (PID " << p_to_schedule->getPid() << ") to Core " << core.id << ".\n";
+            }
+        }
+    }
+}
+
+void Kernel::updateWaitingProcesses() {
+    for (auto& process : m_processes) {
+        if (process->getState() == ProcessState::WAITING) {
+            process->decrementSleepTicks();
+        }
+    }
+}
+
+bool Kernel::isBusy() {
+    if (m_readyQueue.size() > 0) {
+        return true;
+    }
+    for (auto& core : m_cpuCores) {
+        if (core.isBusy) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /* Old, not working scheduleProcesses
