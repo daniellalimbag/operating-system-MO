@@ -80,7 +80,7 @@ void Kernel::run() {
 
     while (true) {
         if (!isBusy() && !m_runningGeneration.load()) {     // If nothing to do, then wait.
-            std::cout << "Kernel: waiting...\n";
+            //std::cout << "Kernel: waiting...\n";
             m_cv.wait(lock);                                // Atomically releases the lock and waits. Reacquires lock on wake-up.
         }
 
@@ -292,8 +292,21 @@ void Kernel::stopProcessGeneration() {
 // Screen Commands
 void Kernel::listStatus() {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
+    uint32_t coresBusy = 0;
+    for(const auto& core: m_cpuCores) {
+        if (core.isBusy) {
+            ++coresBusy;
+        }
+    }
+    std::cout << "CPU Utilization: " << ((static_cast<float>(coresBusy) / static_cast<float>(m_numCpus)) * 100.0f) << "\%\n";
+    std::cout << "Cores used: " << coresBusy << "\n";
+    std::cout << "Cores available: " << m_numCpus - coresBusy << "\n";
+
+    std::cout << "\n\n----------------------------------------\n";
+
     if (m_processes.size() == 0) {
         std::cout << "No processes found." << "\n";
+        std::cout << "----------------------------------------\n";
         return;
     }
 
@@ -313,8 +326,20 @@ void Kernel::listStatus() {
         if (p_ptr->getSleepTicksRemaining() > 0) {
             std::cout << " (Sleeping " << (int)p_ptr->getSleepTicksRemaining() << " ticks)";
         }
+        if (p_ptr->getState() == ProcessState::RUNNING) {
+            for (const auto& core : m_cpuCores) {
+                if (!core.isBusy) {
+                    continue;
+                }
+                if (p_ptr->getPid() == core.currentProcess->getPid()) {
+                    std::cout << " (Core: " << core.id << ")";
+                    break;
+                }
+            }
+        }
         std::cout << "\n";
     }
+    std::cout << "\n";
     std::cout << "Terminated Processes:\n";
     for (const auto& p_ptr : m_processes) {
         if(p_ptr->getState() != ProcessState::TERMINATED)
@@ -332,6 +357,7 @@ void Kernel::listStatus() {
         }
         std::cout << "\n";
     }
+    std::cout << "----------------------------------------\n";
 }
 
 // I/O APIs
