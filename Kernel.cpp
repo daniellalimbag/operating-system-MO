@@ -9,6 +9,7 @@
 Kernel::Kernel()
     : m_nextPid(0),
       m_cpuTicks(0ULL),
+      m_isInitialized(false),
       m_runningGeneration(false),
       m_shutdownRequested(false),
       m_numCpus(4U),
@@ -51,6 +52,8 @@ void Kernel::initialize(const SystemConfig& config) {
         std::cout << "Core " << core.id << "\n";
     }
     */
+    m_isInitialized.store(true); // Set the flag to true
+    m_cv.notify_one();           // Notify the run() thread that initialization is complete
 }
 
 void Kernel::shutdown() {
@@ -66,17 +69,16 @@ void Kernel::shutdown() {
 }
 
 void Kernel::run() {
-    while (true) {
-        std::unique_lock<std::mutex> lock(m_kernelMutex);
+    std::unique_lock<std::mutex> lock(m_kernelMutex);
 
-        // If nothing to do, then wait.
-        if (!isBusy() && !m_runningGeneration.load()) {
-            std::cout << "Kernel: No more pending processes! Waiting...\n";
-            m_cv.wait(lock); // Atomically releases the lock and waits. Reacquires lock on wake-up.
+    m_cv.wait(lock, [this]{ return m_isInitialized.load() || m_shutdownRequested.load(); });        // Wait here until the kernel is initialized
+
+    while (true) {
+        if (!isBusy() && !m_runningGeneration.load()) {     // If nothing to do, then wait.
+            m_cv.wait(lock);                                // Atomically releases the lock and waits. Reacquires lock on wake-up.
         }
 
-        // IMMEDIATE TERMINATION: If m_shutdownRequested is true, break out of the loop.
-        if (m_shutdownRequested) {
+        if (m_shutdownRequested) {      // IMMEDIATE TERMINATION: If m_shutdownRequested is true, break out of the loop.
             break;
         }
 
@@ -116,8 +118,9 @@ void Kernel::run() {
 
         // Small sleep to prevent busy-waiting.
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        lock.lock();   // Re-acquire the lock for the next iteration
     }
-    std::cout << "Kernel: Got out of main loop.\n";
 }
 
 // Dummy Process Generator

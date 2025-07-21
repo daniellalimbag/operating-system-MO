@@ -30,6 +30,7 @@ void Process::setSleepTicks(uint8_t ticks) {
         m_sleepTicksRemaining = ticks;
         setState(ProcessState::WAITING);
     } else {
+        m_sleepTicksRemaining = 0;
         setState(ProcessState::READY); // If ticks <= 0, ready to run immediately
     }
 }
@@ -65,7 +66,7 @@ void Process::executeNextInstruction() {
                     m_programCounter++;
                 }
             }
-        } else {
+        } else {    // never reaches this branch
             std::cerr << "[Process " << m_pid << "] Warning: Loop body instructions exhausted unexpectedly. Popping loop context.\n";
             m_loopStack.pop_back();
             m_programCounter++;
@@ -74,9 +75,7 @@ void Process::executeNextInstruction() {
         if (m_programCounter < m_instructions.size()) {
             const std::unique_ptr<IProcessInstruction>& current_instruction = m_instructions[m_programCounter];
 
-            /*
             std::cout << m_processName << ": Executing instruction type: " << static_cast<int>(current_instruction->getType()) << " Line: " << static_cast<int>(m_programCounter) << "\n";
-            */
 
             if (current_instruction->getType() == InstructionType::FOR) {
                 current_instruction->execute(*this);
@@ -93,8 +92,7 @@ void Process::executeNextInstruction() {
 
         } else {
             setState(ProcessState::TERMINATED);
-            setSleepTicks(0);
-            std::cout << "[Process " << getPid() << "] All main instructions executed. Transitioning to TERMINATED.\n";
+            std::cout << "[Process " << getPid() << "] All main instructions executed. Transitioning to TERMINATED.\n"; // this should not output
         }
     }
 

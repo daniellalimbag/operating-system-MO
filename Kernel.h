@@ -59,6 +59,7 @@ private:
     std::vector<std::unique_ptr<Process>> m_processes;  // Stores all processes managed by the kernel
     int m_nextPid;                                      // Counter for assigning unique PIDs
     unsigned long long m_cpuTicks;                      // Represents the system's conceptual time progression
+    std::atomic<bool> m_isInitialized;                  // Initialized flag for run() to wait before initialization
 
     mutable std::mutex m_kernelMutex;           // Mutex to protect access to Kernel's shared data members
     std::atomic<bool> m_runningGeneration;      // Atomic flag to signal the kernel thread to stop generating dummy processes
