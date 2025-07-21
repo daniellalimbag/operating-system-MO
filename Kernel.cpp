@@ -44,6 +44,7 @@ void Kernel::initialize(const SystemConfig& config) {
         m_cpuCores[i].id = i;
         m_cpuCores[i].currentProcess = nullptr; // No process initially assigned
         m_cpuCores[i].isBusy = false;
+        m_cpuCores[i].currentQuantumTicks = 0U;
     }
 
     std::cout << "Kernel: Kernel initialized with " << m_numCpus << " CPU cores.\n";
@@ -73,12 +74,17 @@ void Kernel::run() {
 
     m_cv.wait(lock, [this]{ return m_isInitialized.load() || m_shutdownRequested.load(); });        // Wait here until the kernel is initialized
 
+    if (m_shutdownRequested.load()) {
+        return;
+    }
+
     while (true) {
         if (!isBusy() && !m_runningGeneration.load()) {     // If nothing to do, then wait.
+            std::cout << "Kernel: waiting...\n";
             m_cv.wait(lock);                                // Atomically releases the lock and waits. Reacquires lock on wake-up.
         }
 
-        if (m_shutdownRequested) {      // IMMEDIATE TERMINATION: If m_shutdownRequested is true, break out of the loop.
+        if (m_shutdownRequested.load()) {      // IMMEDIATE TERMINATION: If m_shutdownRequested is true, break out of the loop.
             break;
         }
 
@@ -98,16 +104,27 @@ void Kernel::run() {
             for (auto& core : m_cpuCores) {
                 if (core.isBusy && core.currentProcess != nullptr) {
                     Process* p = core.currentProcess;
-                    p->executeNextInstruction(); // A process can only be running if it's assigned to a core
-                    if (p->isFinished()) {
-                        core.currentProcess = nullptr;              // Core is now free
-                        core.isBusy = false;
+                    p->executeNextInstruction();                                    // A process can only be running if it's assigned to a core
+                    if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
+                        core.currentQuantumTicks++;                                 // Increment quantum only for Round Robin
                     }
                     if (p->getState() == ProcessState::WAITING) {
-                        core.currentProcess = nullptr;              // Core is now free
+                        core.currentProcess = nullptr;                              // Core is now free
                         core.isBusy = false;
                         p->setState(ProcessState::WAITING);
-                        m_waitingProcesses.push_back(p);                       // Process is pushed back to ready queue
+                        m_waitingProcesses.push_back(p);                            // Process is pushed back to ready queue
+                    } else if (p->isFinished()) {                                   // Checks if process completed all of its instructions
+                        core.currentProcess = nullptr;
+                        core.isBusy = false;
+                        core.currentQuantumTicks = 0;
+                        // Consider adding p to a m_terminatedProcesses list for easier iteration later
+                    } else if (m_schedulerType == SchedulerType::ROUND_ROBIN && core.currentQuantumTicks >= m_quantumCycles) {
+                        // Quantum expired for this process in Round Robin mode
+                        p->setState(ProcessState::READY);                           // Preempt process
+                        m_readyQueue.push(p);
+                        core.currentProcess = nullptr; // Free the core
+                        core.isBusy = false;
+                        core.currentQuantumTicks = 0;
                     }
                 }
             }
@@ -336,14 +353,18 @@ void Kernel::clearScreen() const {
 }
 
 void Kernel::scheduleProcesses() {
-    if (m_schedulerType == SchedulerType::FCFS) {
+    if (m_schedulerType == SchedulerType::FCFS || m_schedulerType == SchedulerType::ROUND_ROBIN) {
         for (auto& core : m_cpuCores) {                             // Iterate in order of the core id
-            if (!core.isBusy && !m_readyQueue.empty()) {            // If the core is idle AND there are processes waiting in the ready queue
+            if (m_readyQueue.empty()) {
+                continue;
+            }
+            if (!core.isBusy) {                                     // If the core is idle
                 Process* p_to_schedule = m_readyQueue.front();      // Get the front process (FCFS)
                 m_readyQueue.pop();                                 // Remove it from the queue
 
                 core.currentProcess = p_to_schedule;                // Assign the process to the core
                 core.isBusy = true;                                 // Mark it as busy
+                core.currentQuantumTicks = 0U;                      // Reset quantum counter for this newly assigned process
                 p_to_schedule->setState(ProcessState::RUNNING);     // Set process as running so it can execute
 
                 /*
@@ -352,18 +373,31 @@ void Kernel::scheduleProcesses() {
             }
         }
     }
+
 }
 
 void Kernel::updateWaitingProcesses() {
-    for (auto& process : m_processes) {
-        if (process->getState() == ProcessState::WAITING) {
-            process->decrementSleepTicks();
-            if (process->getSleepTicksRemaining() == 0) {
-                process->setState(ProcessState::READY);
-                m_readyQueue.push(process.get());
-            }
+    // Use a temporary list for processes that become ready
+    std::vector<Process*> processesToMoveToReady;
+    // Iterate through m_waitingProcesses and identify those that are done sleeping
+    for (Process* p : m_waitingProcesses) { // Iterate m_waitingProcesses directly
+        p->decrementSleepTicks();
+        if (p->getSleepTicksRemaining() == 0) {
+            p->setState(ProcessState::READY);
+            processesToMoveToReady.push_back(p); // Collect processes to move
         }
     }
+
+    // Move processes from temporary list to m_readyQueue
+    for (Process* p : processesToMoveToReady) {
+        m_readyQueue.push(p);
+    }
+
+    // Remove processes that just became READY from m_waitingProcesses
+    m_waitingProcesses.erase(std::remove_if(m_waitingProcesses.begin(), m_waitingProcesses.end(),
+                                            [](Process* p) {
+                                                return p->getState() == ProcessState::READY;
+                                            }), m_waitingProcesses.end());
 }
 
 bool Kernel::isBusy() {
@@ -377,33 +411,3 @@ bool Kernel::isBusy() {
     }
     return false;
 }
-
-/* Old, not working scheduleProcesses
-void Kernel::scheduleProcesses() {
-    // This method is called from within Kernel::run, which already holds m_kernelMutex.
-    // Remove terminated processes first to keep the list clean and avoid scheduling them
-    m_processes.erase(
-        std::remove_if(m_processes.begin(), m_processes.end(),
-                       [](const std::unique_ptr<Process>& p) {
-                           return p->isFinished();
-                       }),
-        m_processes.end());
-
-    // Basic Round-Robin Scheduler (for now):
-    // Find the first READY process and execute one instruction.
-    // In a real OS, this would be more sophisticated (priorities, time slices, context switching).
-    for (const auto& process_ptr : m_processes) {
-        if (process_ptr->getState() == ProcessState::READY) {
-            process_ptr->setState(ProcessState::RUNNING); // Mark as running
-            process_ptr->executeNextInstruction();   // Execute one instruction
-
-            // If the process is not yet terminated, put it back to READY or WAITING
-            if (process_ptr->getState() == ProcessState::RUNNING) { // Still running after instruction
-                process_ptr->setState(ProcessState::READY); // For round-robin, put back to READY
-            }
-            // If it transitioned to TERMINATED or WAITING, leave it in that state.
-            break; // Only execute one process per tick for simplicity
-        }
-    }
-}
-*/

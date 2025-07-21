@@ -22,7 +22,7 @@ void Process::setState(ProcessState newState) {
 bool Process::isFinished() const {
     // A process is finished if its main program counter is at or beyond the end
     // AND its loop stack is empty (no pending FOR loops).
-    return (m_programCounter >= m_instructions.size() && m_loopStack.empty() && m_currentState == ProcessState::TERMINATED);
+    return (m_programCounter >= m_instructions.size() && m_loopStack.empty());
 }
 
 void Process::setSleepTicks(uint8_t ticks) {
@@ -99,7 +99,7 @@ void Process::executeNextInstruction() {
     }
 
     if (m_programCounter >= m_instructions.size() && m_loopStack.empty()) {
-        setSleepTicks(0);
+        m_sleepTicksRemaining = 0;
         setState(ProcessState::TERMINATED);
     }
 }
