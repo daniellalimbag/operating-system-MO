@@ -79,6 +79,6 @@ private:
     std::vector<CPUCore> m_cpuCores;        // Virtual representation of CPU cores
 
     // Internal Kernel Operations
-    void scheduleProcesses();                                           // Selects and runs a process
-    void generateDummyProcess(const std::string& newPname, int newPid); // Dummy Process Generation helper
+    void scheduleProcesses();                                               // Selects and runs a process
+    Process* generateDummyProcess(const std::string& newPname, int newPid); // Dummy Process Generation helper
 };

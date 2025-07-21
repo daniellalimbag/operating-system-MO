@@ -80,15 +80,23 @@ void Kernel::run() {
             break;
         }
 
-        // Process Generation Logic: Only generate if m_running is true
-        if (m_running) {
-            if (m_cpuTicks % m_batchProcessFreq == 0) {
+        if (m_running) { // m_running is for both process generation and process execution. So it only stops when both are finished/stopped.
+            if (m_cpuTicks % m_batchProcessFreq == 0) {                                 // Process Generation Logic: Only generate if m_running is true
                 int newPid = m_nextPid++; // Get next available PID and increment
                 std::string newPname = "process" + std::to_string(newPid);
                 generateDummyProcess(newPname, newPid);
             }
-            if (m_cpuTicks % m_delaysPerExec == 0) {
-                //scheduleProcesses();
+            if (m_cpuTicks % m_delaysPerExec == 0) {                                    // Cpu Core Process Execution
+                for (auto& core : m_cpuCores) {
+                    if (core.isBusy && core.currentProcess != nullptr) {
+                        Process* p = core.currentProcess;
+                        p->executeNextInstruction(); // A process can only be running if it's assigned to a core
+                        if (p->isFinished()) {
+                            core.currentProcess = nullptr; // Core is now free
+                            core.isBusy = false;
+                        }
+                    }
+                }
             }
             m_cpuTicks++;
         }
@@ -101,7 +109,7 @@ void Kernel::run() {
 }
 
 // Dummy Process Generator
-void Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
+Process* Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
     // No need for mutex because it's only called within run()
     // Use a random number generator
     // static ensures the generator is initialized only once per program run
@@ -208,14 +216,23 @@ void Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
         }
     }
 
-    // Create the process and add it to the kernel's process list
-    m_processes.push_back(std::make_unique<Process>(newPid, newPname, std::move(instructions)));
+    // Create the process using std::make_unique
+    std::unique_ptr<Process> newProcess = std::make_unique<Process>(newPid, newPname, std::move(instructions));
+
+    // Get a raw pointer to the process before moving ownership to m_processes
+    // This pointer will remain valid as long as the unique_ptr in m_processes manages the object.
+    Process* rawProcessPtr = newProcess.get();
+
+    // Add the unique_ptr to the kernel's process list, transferring ownership
+    m_processes.push_back(std::move(newProcess));
 
     /*
     std::cout << "[Kernel] Generated dummy process with PID: " << newPid
               << ". Instructions: " << numInstructions
               << ". Total processes: " << m_processes.size() << "\n";
     */
+
+    return rawProcessPtr;
 }
 
 // Process Generation Control
@@ -298,17 +315,5 @@ void Kernel::scheduleProcesses() {
             break; // Only execute one process per tick for simplicity
         }
     }
-}
-*/
-
-/* Not used
-Process* Kernel::findProcessByPid(int pid) const {
-    // This method is called from within a critical section (e.g., getProcessStatus, scheduleProcesses), which already holds m_kernelMutex
-    for (const auto& p : m_processes) {
-        if (p->getPid() == pid) {
-            return p.get(); // Return raw pointer to the Process object
-        }
-    }
-    return nullptr; // Process not found
 }
 */

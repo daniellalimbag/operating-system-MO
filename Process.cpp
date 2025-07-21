@@ -44,7 +44,7 @@ void Process::executeNextInstruction() {
         LoopContext& currentLoop = m_loopStack.back();
         const ForInstruction* forInstr = currentLoop.forInstructionPtr;
 
-        if (currentLoop.currentInstructionIndexInBody < forInstr->getBody().size()) {
+        if (currentLoop.currentInstructionIndexInBody < forInstr->getBody().size()) { // If in a loop
             const std::unique_ptr<IProcessInstruction>& current_instruction_in_loop =
                 forInstr->getBody()[currentLoop.currentInstructionIndexInBody];
 
