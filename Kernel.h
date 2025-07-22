@@ -18,7 +18,7 @@
  * @brief Represents a single CPU core in the emulator.
  */
 struct CPUCore {
-    int id; // Unique identifier for the core (e.g., 0, 1, 2...)
+    uint32_t id; // Unique identifier for the core (e.g., 0, 1, 2...)
     Process* currentProcess; // Pointer to the process currently running on this core
     bool isBusy;             // True if the core is currently executing a process
     uint32_t currentQuantumTicks; // New: Tracks ticks consumed in current quantum for currentProcess

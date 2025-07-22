@@ -6,11 +6,10 @@ This is the first group machine project in CSOPESY: Process Multiplexer and CLI.
 
 ## Features
 - Multi-core CPU scheduler (supports FCFS and Round Robin)
-- Processes are managed and scheduled across multiple simulated CPU cores (threads)
+- Processes are managed and scheduled across multiple simulated CPU cores
 - Process creation and management via CLI commands
 - Per-process instruction execution (PRINT, DECLARE, ADD, SUBTRACT, SLEEP, FOR)
 - Real-time process status and CPU utilization reporting
-- Marquee Console that bounces text with dynamic borders
 - Configurable system parameters via `config.txt`
 
 ## How to Build

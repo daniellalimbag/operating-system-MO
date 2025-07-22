@@ -1,6 +1,11 @@
 #include "ProcessInstruction.h"
 #include "Process.h"
 
+#include <chrono>
+#include <iomanip>
+#include <ctime>
+#include <sstream>
+
 // --- AddInstruction Implementation ---
 void AddInstruction::execute(Process& process) {
     uint16_t val2 = process.getVariableValue(var2_operand);
@@ -43,6 +48,31 @@ void ForInstruction::execute(Process& process) {
 // --- PrintInstruction Implementation ---
 void PrintInstruction::execute(Process& process) {
     std::string output = message;
+
+    auto now = std::chrono::system_clock::now();                                // 1. Get the current time_point from system_clock
+    std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);         // 2. Convert to std::time_t for date/time components (seconds resolution)
+    std::tm local_tm;                                                           // 3. Convert to std::tm structure for local time components (thread-safe way)
+    #ifdef _WIN32
+        localtime_s(&local_tm, &now_time_t); // Windows-specific, thread-safe
+    #else
+        localtime_r(&now_time_t, &local_tm); // POSIX (Linux/macOS) specific, thread-safe
+    #endif
+
+                                                                                // 4. Calculate the microseconds component.
+    auto us_since_epoch = std::chrono::duration_cast<std::chrono::microseconds>(
+        now.time_since_epoch()                                                  // First, get the duration since epoch in microseconds
+    );
+    auto fractional_microseconds = us_since_epoch.count() % 1000000;            // Then, subtract the whole seconds converted to microseconds to get just the fractional part. Modulo 1,000,000 to get remainder
+    std::ostringstream oss;                                                     // 5. Format the output string using stringstream
+    oss << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S");
+    oss << "." << std::setfill('0') << std::setw(6) << fractional_microseconds; // Append microseconds (zero-padded to 6 digits)
+    std::string formatted_time = oss.str();
+
+    uint32_t coreId = process.getCurrentExecutionCoreId();
+
+    // Prepend timestamp and core ID to the output message
+    std::string prefix = "  [" + formatted_time + "] [Core: " + std::to_string(coreId) + "] "; //
+    output.insert(0, prefix);
 
     // Find and replace '+var' syntax for variable interpolation
     size_t pos = 0;

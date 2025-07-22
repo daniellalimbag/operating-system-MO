@@ -104,7 +104,7 @@ void Kernel::run() {
             for (auto& core : m_cpuCores) {
                 if (core.isBusy && core.currentProcess != nullptr) {
                     Process* p = core.currentProcess;
-                    p->executeNextInstruction();                                    // A process can only be running if it's assigned to a core
+                    p->executeNextInstruction(core.id);                                    // A process can only be running if it's assigned to a core
                     if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
                         core.currentQuantumTicks++;                                 // Increment quantum only for Round Robin
                     }
@@ -122,7 +122,7 @@ void Kernel::run() {
                         // Quantum expired for this process in Round Robin mode
                         p->setState(ProcessState::READY);                           // Preempt process
                         m_readyQueue.push(p);
-                        core.currentProcess = nullptr; // Free the core
+                        core.currentProcess = nullptr;                              // Free the core
                         core.isBusy = false;
                         core.currentQuantumTicks = 0;
                     }
@@ -134,7 +134,7 @@ void Kernel::run() {
         lock.unlock(); // Release the lock before sleeping
 
         // Small sleep to prevent busy-waiting.
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
         lock.lock();   // Re-acquire the lock for the next iteration
     }
@@ -345,6 +345,7 @@ void Kernel::listStatus() const {
         if(p_ptr->getState() != ProcessState::TERMINATED)
             continue;
         std::cout << "  " << p_ptr->getPname() << " (PID " << p_ptr->getPid() << ")"
+                    << " (" << p_ptr->getCreationTime() << ")"
                     << " State: " << (p_ptr->getState() == ProcessState::NEW ? "NEW" :
                                         p_ptr->getState() == ProcessState::READY ? "READY" :
                                         p_ptr->getState() == ProcessState::RUNNING ? "RUNNING" :
@@ -405,6 +406,7 @@ Process* Kernel::startProcess(const std::string& processName) {
         newProcess = generateDummyProcess(processName, newPid);
         newProcess->setState(ProcessState::READY);
         m_readyQueue.push(newProcess);
+
         std::cout << "Process Name: " << newProcess->getPname() << "\n";
         std::cout << "ID: " << newProcess->getPid() << "\n";
         std::cout << "Logs:\n";

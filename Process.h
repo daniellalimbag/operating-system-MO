@@ -54,7 +54,7 @@ public: // Public interface for Kernel interaction
     // Core Lifecycle & Execution Methods
     void setState(ProcessState newState);
     bool isFinished() const;
-    void executeNextInstruction();
+    void executeNextInstruction(uint32_t coreId);
 
     // Public Getters for Read-Only Information
     int getPid() const { return m_pid; }
@@ -62,8 +62,9 @@ public: // Public interface for Kernel interaction
     ProcessState getState() const { return m_currentState; }
     std::chrono::system_clock::time_point getCreationTime() const { return m_creationTime; }
     uint8_t getSleepTicksRemaining() const { return m_sleepTicksRemaining; }
-    size_t getCurrentInstructionLine() const; // Returns absolute line number or line in current loop body
-    size_t getTotalInstructionLines() const;  // Returns total lines or loop body size if in loop
+    size_t getCurrentInstructionLine() const { return m_programCounter; }
+    size_t getTotalInstructionLines() const { return m_instructions.size(); }
+    uint32_t getCurrentExecutionCoreId() const { return m_currentExecutionCoreId; }
 
     void decrementSleepTicks() { if (m_sleepTicksRemaining > 0) m_sleepTicksRemaining--; }
     void setSleepTicks(uint8_t ticks);
@@ -102,4 +103,7 @@ private:
     std::map<std::string, uint16_t> m_variables; // For process's local variables
     std::vector<std::string> m_logBuffer;       // For process's screen output (PRINT statements)
     std::vector<LoopContext> m_loopStack;       // For FOR loop management
+
+    // Current execution context
+    int m_currentExecutionCoreId;
 };

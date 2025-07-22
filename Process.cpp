@@ -35,11 +35,14 @@ void Process::setSleepTicks(uint8_t ticks) {
     }
 }
 
-void Process::executeNextInstruction() {
+void Process::executeNextInstruction(uint32_t coreId) {
     if (m_currentState != ProcessState::RUNNING) {
         std::cerr << "Error: Process " << getPid() << " attempted to execute while not RUNNING. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << " " << m_programCounter << "/" << m_instructions.size() << "\n";
         return;
     }
+
+    m_currentExecutionCoreId = coreId;          // Store the current execution context
+
     /*
     std::cout << "Process " << getPid() << " executing. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << " " << m_programCounter << "/" << m_instructions.size() << "\n";
     */
@@ -63,7 +66,9 @@ void Process::executeNextInstruction() {
                     currentLoop.currentInstructionIndexInBody = 0;
                 } else {
                     m_loopStack.pop_back();
-                    m_programCounter++;
+                    if (m_loopStack.empty()) {
+                        m_programCounter++; // Increment main PC ONLY when the outermost FOR loop completes
+                    }
                 }
             }
         } else {    // never reaches this branch
@@ -147,22 +152,4 @@ void Process::pushLoopContext(const ForInstruction* forInstr) {
         return;
     }
     m_loopStack.emplace_back(forInstr->getRepeatCount(), forInstr);
-}
-
-size_t Process::getCurrentInstructionLine() const {
-    /*
-    if (!m_loopStack.empty()) {
-        return m_loopStack.back().currentInstructionIndexInBody;
-    }
-    */
-    return m_programCounter;
-}
-
-size_t Process::getTotalInstructionLines() const {
-    /*
-    if (!m_loopStack.empty()) {
-        return m_loopStack.back().forInstructionPtr->getBody().size();
-    }
-    */
-    return m_instructions.size();
 }
