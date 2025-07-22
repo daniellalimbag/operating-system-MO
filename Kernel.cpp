@@ -224,7 +224,7 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
                     for (int j = 0; j < bodySize; ++j) {
                         // For simplicity, mostly print or declare within loops
                         if (std::uniform_int_distribution<>(0, 1)(gen) == 0) {
-                            loopBody.push_back(std::make_unique<PrintInstruction>("Looping... +counter"));
+                            loopBody.push_back(std::make_unique<PrintInstruction>("Hello world from " + newPname + "!"));
                         } else {
                             loopBody.push_back(std::make_unique<DeclareInstruction>(getRandomVarName(), distrib_value(gen)));
                         }
@@ -302,7 +302,7 @@ void Kernel::listStatus() const {
     std::cout << "Cores used: " << coresBusy << "\n";
     std::cout << "Cores available: " << m_numCpus - coresBusy << "\n";
 
-    std::cout << "\n\n----------------------------------------\n";
+    std::cout << "\n----------------------------------------\n";
 
     if (m_processes.size() == 0) {
         std::cout << "No processes found." << "\n";
@@ -367,6 +367,9 @@ Process* Kernel::reattachToProcess(const std::string& processName) const {
     for (const auto& p_ptr : m_processes) {
         if (p_ptr->getPname() == processName) {
             foundProcess = p_ptr.get();
+            if (p_ptr->getState() == ProcessState::TERMINATED) {    // Can't view terminated process
+                return nullptr;
+            }
             break;
         }
     }
@@ -395,11 +398,28 @@ Process* Kernel::reattachToProcess(const std::string& processName) const {
 }
 
 Process* Kernel::startProcess(const std::string& processName) {
-    std::lock_guard<std::mutex> lock(m_kernelMutex);
-    int newPid = m_nextPid++; // Get next available PID and increment
-    Process* newProcess = generateDummyProcess(processName, newPid);
-    newProcess->setState(ProcessState::READY);
-    m_readyQueue.push(newProcess);
+    Process* newProcess;
+    {
+        std::lock_guard<std::mutex> lock(m_kernelMutex);
+        int newPid = m_nextPid++; // Get next available PID and increment
+        newProcess = generateDummyProcess(processName, newPid);
+        newProcess->setState(ProcessState::READY);
+        m_readyQueue.push(newProcess);
+        std::cout << "Process Name: " << newProcess->getPname() << "\n";
+        std::cout << "ID: " << newProcess->getPid() << "\n";
+        std::cout << "Logs:\n";
+        const auto& logBuffer = newProcess->getLogBuffer();
+        if (logBuffer.empty()) {
+            std::cout << "Process log is empty.\n";
+        } else {
+            for (const std::string& logEntry : logBuffer) { // Print each entry in the log
+                std::cout << logEntry << "\n";
+            }
+        }
+        std::cout << "--- End of process log ---\n";
+        std::cout << "Current instruction line: " << newProcess->getCurrentInstructionLine() << "\n";
+        std::cout << "Lines of code: " << newProcess->getTotalInstructionLines() << "\n";
+    }
     m_cv.notify_one(); // Wake up run() thread if it's waiting
     return newProcess;
 }

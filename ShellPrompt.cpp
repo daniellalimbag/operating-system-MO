@@ -126,7 +126,7 @@ void ShellPrompt::processCommand(const std::string& command) {
             if (processFound) {
                 screenMenu(processFound);
             } else {
-                kernel.print("Process with name '" + processName + "' not found.\n");
+                kernel.print("Process with name '" + processName + "' not found or finished executing.\n");
             }
         } else {
             kernel.print("Usage: screen -r <process_name>\n"); // Inform the user of correct usage
@@ -143,7 +143,6 @@ void ShellPrompt::processCommand(const std::string& command) {
                 screenMenu(processFound);
             } else {
                 processFound = kernel.startProcess(processName);
-                kernel.reattachToProcess(processName);
                 screenMenu(processFound);
             }
         } else {
