@@ -46,7 +46,10 @@ public:
     void stopProcessGeneration();       // scheduler-stop
 
     // Screen Commands
-    void listStatus();                  // screen -ls
+    void listStatus() const;                                            // screen -ls
+    Process* reattachToProcess(const std::string& processName) const;   // screen -r
+    Process* startProcess(const std::string& processName);              // screen -s
+    void printSmi(Process* process) const;                              // process-smi
 
     // System Clock & Time
     unsigned long long getCurrentCpuTick() const;

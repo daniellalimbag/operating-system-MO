@@ -3,6 +3,7 @@
 #include <string>
 
 class Kernel; // Forward declaration of Kernel class.
+class Process;
 
 /**
  * @class ShellPrompt
@@ -17,5 +18,6 @@ private:
     Kernel& kernel; // Reference to the OS kernel for accessing its services.
 
     void processCommand(const std::string& command);
+    void screenMenu(Process* process);
     void showHelp() const;
 };
