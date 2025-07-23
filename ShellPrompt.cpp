@@ -126,7 +126,7 @@ void ShellPrompt::processCommand(const std::string& command) {
             if (processFound) {
                 screenMenu(processFound);
             } else {
-                kernel.print("Process with name '" + processName + "' not found or finished executing.\n");
+                kernel.print("Process with name '" + processName + "' not found or terminated.\n");
             }
         } else {
             kernel.print("Usage: screen -r <process_name>\n"); // Inform the user of correct usage

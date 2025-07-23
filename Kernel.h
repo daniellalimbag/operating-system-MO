@@ -80,7 +80,8 @@ private:
     uint32_t m_delaysPerExec;
     uint32_t m_maxOverallMem;
     uint32_t m_memPerFrame;
-    uint32_t m_memPerProc;
+    uint32_t m_minMemPerProc;
+    uint32_t m_maxMemPerProc;
 
     std::vector<CPUCore> m_cpuCores;            // Virtual representation of CPU cores
     std::queue<Process*> m_readyQueue;          // Virtual representation of the ready queue for scheduling

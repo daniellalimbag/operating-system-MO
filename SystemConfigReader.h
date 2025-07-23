@@ -99,11 +99,11 @@ bool readConfigFromFile(const std::string& filename, SystemConfig& config, Kerne
                 file.clear(); file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             }
         }
-        else if (key == "mem-per-frame") {
+        else if (key == "min-mem-per-frame") {
             uint32_t val;
             if (file >> val) {
-                if (val < 16 || val > 65536 || !isPowerOfTwo(val)) {
-                    kernel.print("Error: mem-per-frame must be a power of 2 in [16, 65536]. Using default.\n");
+                if (val < 64 || val > 65536 || !isPowerOfTwo(val)) {
+                    kernel.print("Error: mem-per-frame must be a power of 2 in [64, 65536]. Using default.\n");
                     success = false;
                 } else {
                     config.memPerFrame = val;
@@ -113,14 +113,28 @@ bool readConfigFromFile(const std::string& filename, SystemConfig& config, Kerne
                 file.clear(); file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             }
         }
-        else if (key == "mem-per-proc") {
+        else if (key == "min-mem-per-proc") {
             uint32_t val;
             if (file >> val) {
                 if (val < 64 || val > 65536 || !isPowerOfTwo(val)) {
-                    kernel.print("Error: mem-per-proc must be a power of 2 in [64, 65536]. Using default.\n");
+                    kernel.print("Error: min-mem-per-proc must be a power of 2 in [64, 65536]. Using default.\n");
                     success = false;
                 } else {
-                    config.memPerProc = val;
+                    config.minMemPerProc = val;
+                }
+            } else {
+                kernel.print("Warning: Malformed value for mem-per-proc. Using default.\n"); success = false;
+                file.clear(); file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            }
+        }
+        else if (key == "max-mem-per-proc") {
+            uint32_t val;
+            if (file >> val) {
+                if (val < 64 || val > 65536 || !isPowerOfTwo(val)) {
+                    kernel.print("Error: max-mem-per-proc must be a power of 2 in [64, 65536]. Using default.\n");
+                    success = false;
+                } else {
+                    config.maxMemPerProc = val;
                 }
             } else {
                 kernel.print("Warning: Malformed value for mem-per-proc. Using default.\n"); success = false;

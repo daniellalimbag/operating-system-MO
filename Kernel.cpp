@@ -19,9 +19,10 @@ Kernel::Kernel()
       m_minInstructions(1000U),
       m_maxInstructions(2000U),
       m_delaysPerExec(0U),
-      m_maxOverallMem(64U),
-      m_memPerFrame(16U),
-      m_memPerProc(64U) {}
+      m_maxOverallMem(128U),
+      m_memPerFrame(64U),
+      m_minMemPerProc(64U),
+      m_maxMemPerProc(64U) {}
 
 // Core Lifecycle Methods
 void Kernel::initialize(const SystemConfig& config) {
@@ -35,7 +36,8 @@ void Kernel::initialize(const SystemConfig& config) {
     m_delaysPerExec = config.delaysPerExec;
     m_maxOverallMem = config.maxOverallMem;
     m_memPerFrame = config.memPerFrame;
-    m_memPerProc = config.memPerProc;
+    m_minMemPerProc = config.minMemPerProc;
+    m_maxMemPerProc = config.maxMemPerProc;
 
     // --- Initialize CPU Cores ---
     m_cpuCores.clear(); // Clear any existing cores
