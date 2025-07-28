@@ -99,7 +99,7 @@ bool readConfigFromFile(const std::string& filename, SystemConfig& config, Kerne
                 file.clear(); file.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             }
         }
-        else if (key == "min-mem-per-frame") {
+        else if (key == "mem-per-frame") {
             uint32_t val;
             if (file >> val) {
                 if (val < 64 || val > 65536 || !isPowerOfTwo(val)) {

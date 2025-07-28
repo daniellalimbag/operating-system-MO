@@ -7,7 +7,7 @@
 #include <limits>
 
 Kernel::Kernel()
-    : m_nextPid(0),
+    : m_nextPid(1),
       m_cpuTicks(0ULL),
       m_isInitialized(false),
       m_runningGeneration(false),
@@ -26,36 +26,43 @@ Kernel::Kernel()
 
 // Core Lifecycle Methods
 void Kernel::initialize(const SystemConfig& config) {
-    std::lock_guard<std::mutex> lock(m_kernelMutex); // This lock ensures that no other thread is modifying kernel state
-    m_numCpus = config.numCPUs;
-    m_schedulerType = config.scheduler;
-    m_quantumCycles = config.quantumCycles;
-    m_batchProcessFreq = config.batchProcessFreq;
-    m_minInstructions = config.minInstructions;
-    m_maxInstructions = config.maxInstructions;
-    m_delaysPerExec = config.delaysPerExec;
-    m_maxOverallMem = config.maxOverallMem;
-    m_memPerFrame = config.memPerFrame;
-    m_minMemPerProc = config.minMemPerProc;
-    m_maxMemPerProc = config.maxMemPerProc;
+    {
+        std::lock_guard<std::mutex> lock(m_kernelMutex); // This lock ensures that no other thread is modifying kernel state
+        m_numCpus = config.numCPUs;
+        m_schedulerType = config.scheduler;
+        m_quantumCycles = config.quantumCycles;
+        m_batchProcessFreq = config.batchProcessFreq;
+        m_minInstructions = config.minInstructions;
+        m_maxInstructions = config.maxInstructions;
+        m_delaysPerExec = config.delaysPerExec;
+        m_maxOverallMem = config.maxOverallMem;
+        m_memPerFrame = config.memPerFrame;
+        m_minMemPerProc = config.minMemPerProc;
+        m_maxMemPerProc = config.maxMemPerProc;
 
-    // --- Initialize CPU Cores ---
-    m_cpuCores.clear(); // Clear any existing cores
-    m_cpuCores.resize(m_numCpus); // Create the specified number of cores
-    for (uint32_t i = 0; i < m_numCpus; ++i) {
-        m_cpuCores[i].id = i;
-        m_cpuCores[i].currentProcess = nullptr; // No process initially assigned
-        m_cpuCores[i].isBusy = false;
-        m_cpuCores[i].currentQuantumTicks = 0U;
+        // --- Initialize CPU Cores ---
+        m_cpuCores.clear(); // Clear any existing cores
+        m_cpuCores.resize(m_numCpus); // Create the specified number of cores
+        for (uint32_t i = 0; i < m_numCpus; ++i) {
+            m_cpuCores[i].id = i;
+            m_cpuCores[i].currentProcess = nullptr; // No process initially assigned
+            m_cpuCores[i].isBusy = false;
+            m_cpuCores[i].currentQuantumTicks = 0U;
+        }
+        std::cout << "Kernel: Kernel initialized with " << m_numCpus << " CPU cores.\n";
+        /*
+        for (const auto& core: m_cpuCores) {
+            std::cout << "Core " << core.id << "\n";
+        }
+        */
+        m_isInitialized.store(true); // Set the flag to true
+
+        // --- Initialize Page Table ---
+        uint32_t totalFrames = m_maxOverallMem / m_memPerFrame;
+        m_pageTable.reserve(totalFrames);
+        std::cout << "Kernel: Page Table initialized with " << totalFrames << " total frames.\n";
     }
 
-    std::cout << "Kernel: Kernel initialized with " << m_numCpus << " CPU cores.\n";
-    /*
-    for (const auto& core: m_cpuCores) {
-        std::cout << "Core " << core.id << "\n";
-    }
-    */
-    m_isInitialized.store(true); // Set the flag to true
     m_cv.notify_one();           // Notify the run() thread that initialization is complete
 }
 
@@ -150,29 +157,31 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
     static std::random_device rd;
     static std::mt19937 gen(rd());
 
-    // 1. Determine random number of instructions within the specified range
+    // Determine random number of instructions within the specified range
     // Ensure m_minInstructions and m_maxInstructions are initialized (e.g., in Kernel constructor or initialize method)
     if (m_minInstructions == 0 || m_maxInstructions == 0 || m_minInstructions > m_maxInstructions) {
         std::cerr << "[Kernel] Warning: Invalid instruction range (" << m_minInstructions
                   << "-" << m_maxInstructions << "). Using default range [10, 50].\n";
-        m_minInstructions = 10; // Fallback to a sensible default
-        m_maxInstructions = 50;
+        m_minInstructions = 1000U; // Fallback to default
+        m_maxInstructions = 2000U;
     }
-    std::uniform_int_distribution<> distrib_num_instructions(m_minInstructions, m_maxInstructions);
-    size_t numInstructions = distrib_num_instructions(gen);
+    std::uniform_int_distribution<uint32_t> distrib_num_instructions(m_minInstructions, m_maxInstructions);
+    uint32_t numInstructions = distrib_num_instructions(gen);
 
     std::vector<std::unique_ptr<IProcessInstruction>> instructions;
     instructions.reserve(numInstructions);
 
     // A list of possible variable names to use in dummy processes
     const std::vector<std::string> varNames = {"a", "b", "c", "x", "y", "counter", "temp"};
-    // A distribution for random values (0-65,535 for uint16_t)
+    // A distribution for random values (0 to 65,535 for uint16_t)
     std::uniform_int_distribution<uint16_t> distrib_value(std::numeric_limits<uint16_t>::min(), std::numeric_limits<uint16_t>::max());
-    // A distribution for sleep ticks (e.g., 1 to 255 ticks for uint8_t)
+    // A distribution for sleep ticks (1 to 255 ticks for uint8_t)
     std::uniform_int_distribution<uint8_t> distrib_sleep_ticks(1, 255);
     // A distribution for loop repeats (e.g., 1 to 3 repeats)
     std::uniform_int_distribution<int> distrib_loop_repeats(1, 3);
-
+    // A distribution for memory required (e.g., 64 to 65,536 for uint32_t)
+    std::uniform_int_distribution<uint32_t> distrib_mem_required(m_minMemPerProc);
+    uint32_t memRequired = distrib_mem_required(gen);
 
     // Define the types of instructions we can generate
     enum class DummyInstructionType {
@@ -251,7 +260,7 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
     }
 
     // Create the process using std::make_unique
-    std::unique_ptr<Process> newProcess = std::make_unique<Process>(newPid, newPname, std::move(instructions));
+    std::unique_ptr<Process> newProcess = std::make_unique<Process>(newPid, newPname, memRequired, std::move(instructions));
 
     // Get a raw pointer to the process before moving ownership to m_processes
     // This pointer will remain valid as long as the unique_ptr in m_processes manages the object.

@@ -49,7 +49,7 @@ struct LoopContext {
  */
 class Process {
 public: // Public interface for Kernel interaction
-    Process(int id, std::string processName, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds);
+    Process(int id, std::string processName, uint32_t memoryRequired , std::vector<std::unique_ptr<IProcessInstruction>>&& cmds);
 
     // Core Lifecycle & Execution Methods
     void setState(ProcessState newState);
@@ -65,6 +65,7 @@ public: // Public interface for Kernel interaction
     size_t getCurrentInstructionLine() const { return m_programCounter; }
     size_t getTotalInstructionLines() const { return m_instructions.size(); }
     uint32_t getCurrentExecutionCoreId() const { return m_currentExecutionCoreId; }
+    uint32_t getMemoryRequired() const { return m_memoryRequired; }
 
     void decrementSleepTicks() { if (m_sleepTicksRemaining > 0) m_sleepTicksRemaining--; }
     void setSleepTicks(uint8_t ticks);
@@ -89,6 +90,7 @@ public: // Public interface for Kernel interaction
 private:
     int m_pid;
     std::string m_processName;
+    uint32_t m_memoryRequired;
 
     // Control Flow Variables
     ProcessState m_currentState;

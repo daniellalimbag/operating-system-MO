@@ -86,6 +86,7 @@ private:
     std::vector<CPUCore> m_cpuCores;            // Virtual representation of CPU cores
     std::queue<Process*> m_readyQueue;          // Virtual representation of the ready queue for scheduling
     std::vector<Process*> m_waitingProcesses;   // Pointers to handle waiting processes before putting in the ready queue
+    std::vector<int> m_pageTable;               // Virtual representation of the page table. Index = Frame, Value = Process it's assigned to
 
     // Internal Kernel Operations
     void scheduleProcesses();                                               // Selects and runs a process
