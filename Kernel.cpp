@@ -121,7 +121,7 @@ void Kernel::run() {
                         core.currentProcess = nullptr;                              // Core is now free
                         core.isBusy = false;
                         p->setState(ProcessState::WAITING);
-                        m_waitingProcesses.push_back(p);                            // Process is pushed back to ready queue
+                        m_waitingQueue.push_back(p);                            // Process is pushed back to ready queue
                     } else if (p->isFinished()) {                                   // Checks if process completed all of its instructions
                         core.currentProcess = nullptr;
                         core.isBusy = false;
@@ -461,8 +461,8 @@ void Kernel::scheduleProcesses() {
 void Kernel::updateWaitingProcesses() {
     // Use a temporary list for processes that become ready
     std::vector<Process*> processesToMoveToReady;
-    // Iterate through m_waitingProcesses and identify those that are done sleeping
-    for (Process* p : m_waitingProcesses) { // Iterate m_waitingProcesses directly
+    // Iterate through m_waitingQueue and identify those that are done sleeping
+    for (Process* p : m_waitingQueue) { // Iterate m_waitingQueue directly
         p->decrementSleepTicks();
         if (p->getSleepTicksRemaining() == 0) {
             p->setState(ProcessState::READY);
@@ -475,15 +475,15 @@ void Kernel::updateWaitingProcesses() {
         m_readyQueue.push(p);
     }
 
-    // Remove processes that just became READY from m_waitingProcesses
-    m_waitingProcesses.erase(std::remove_if(m_waitingProcesses.begin(), m_waitingProcesses.end(),
+    // Remove processes that just became READY from m_waitingQueue
+    m_waitingQueue.erase(std::remove_if(m_waitingQueue.begin(), m_waitingQueue.end(),
                                             [](Process* p) {
                                                 return p->getState() == ProcessState::READY;
-                                            }), m_waitingProcesses.end());
+                                            }), m_waitingQueue.end());
 }
 
 bool Kernel::isBusy() {
-    if (!m_readyQueue.empty() || !m_waitingProcesses.empty()) { // Check if either ready queue or waiting processes has items
+    if (!m_readyQueue.empty() || !m_waitingQueue.empty()) { // Check if either ready queue or waiting processes has items
         return true;
     }
     for (auto& core : m_cpuCores) {

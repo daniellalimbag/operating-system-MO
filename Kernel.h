@@ -5,7 +5,6 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
-#include <map>
 #include <cstdint>
 #include <queue>
 
@@ -38,9 +37,6 @@ public:
     void shutdown();
     void run();
 
-    // Process Management
-    // int createProcess(std::vector<std::unique_ptr<IProcessInstruction>> instructions);
-
     // Process Generation Control
     void startProcessGeneration();      // scheduler-start
     void stopProcessGeneration();       // scheduler-stop
@@ -50,9 +46,6 @@ public:
     Process* reattachToProcess(const std::string& processName) const;   // screen -r
     Process* startProcess(const std::string& processName);              // screen -s
     void printSmi(Process* process) const;                              // process-smi
-
-    // System Clock & Time
-    unsigned long long getCurrentCpuTick() const;
 
     // I/O APIs
     void print(const std::string& message) const;
@@ -85,7 +78,7 @@ private:
 
     std::vector<CPUCore> m_cpuCores;            // Virtual representation of CPU cores
     std::queue<Process*> m_readyQueue;          // Virtual representation of the ready queue for scheduling
-    std::vector<Process*> m_waitingProcesses;   // Pointers to handle waiting processes before putting in the ready queue
+    std::vector<Process*> m_waitingQueue;       // Pointers to handle waiting processes before putting in the ready queue
     std::vector<int> m_pageTable;               // Virtual representation of the page table. Index = Frame, Value = Process it's assigned to
 
     // Internal Kernel Operations
@@ -93,5 +86,5 @@ private:
     void updateWaitingProcesses();                                          // Update status of waiting processes (e.g., sleeping)
     bool isBusy();                                                          // Checks if any core is busy or if there are still processes in the ready queue
     Process* generateDummyProcess(const std::string& newPname, int newPid); // Dummy Process Generation helper
-    void displayProcess(Process* process) const;                                  // Prints the details of the process for the screen commands and print-smi
+    void displayProcess(Process* process) const;                            // Prints the details of the process for the screen commands and print-smi
 };
