@@ -6,8 +6,9 @@ csopesy.exe
 bin/
 # Ignore the config file
 config.txt
-# Ignore all VSCode settings (optional)
+# Ignore all VSCode settings and other generated files
 .vscode/
 .git/
 ./memory_stamps
 csopesy.dSYM/
+.DS_Store
