@@ -93,4 +93,5 @@ private:
     void updateWaitingProcesses();                                          // Update status of waiting processes (e.g., sleeping)
     bool isBusy();                                                          // Checks if any core is busy or if there are still processes in the ready queue
     Process* generateDummyProcess(const std::string& newPname, int newPid); // Dummy Process Generation helper
+    void displayProcess(Process* process) const;                                  // Prints the details of the process for the screen commands and print-smi
 };

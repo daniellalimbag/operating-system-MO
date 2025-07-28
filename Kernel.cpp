@@ -180,7 +180,7 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
     // A distribution for loop repeats (e.g., 1 to 3 repeats)
     std::uniform_int_distribution<int> distrib_loop_repeats(1, 3);
     // A distribution for memory required (e.g., 64 to 65,536 for uint32_t)
-    std::uniform_int_distribution<uint32_t> distrib_mem_required(m_minMemPerProc);
+    std::uniform_int_distribution<uint32_t> distrib_mem_required(m_minMemPerProc, m_maxMemPerProc);
     uint32_t memRequired = distrib_mem_required(gen);
 
     // Define the types of instructions we can generate
@@ -391,20 +391,7 @@ Process* Kernel::reattachToProcess(const std::string& processName) const {
     }
 
     clearScreen();
-    std::cout << "Process Name: " << foundProcess->getPname() << "\n";
-    std::cout << "ID: " << foundProcess->getPid() << "\n";
-    std::cout << "Logs:\n";
-    const auto& logBuffer = foundProcess->getLogBuffer();
-    if (logBuffer.empty()) {
-        std::cout << "Process log is empty.\n";
-    } else {
-        for (const std::string& logEntry : logBuffer) { // Print each entry in the log
-            std::cout << logEntry << "\n";
-        }
-    }
-    std::cout << "--- End of process log ---\n";
-    std::cout << "Current instruction line: " << foundProcess->getCurrentInstructionLine() << "\n";
-    std::cout << "Lines of code: " << foundProcess->getTotalInstructionLines() << "\n";
+    displayProcess(foundProcess);
 
     return foundProcess;
 }
@@ -418,20 +405,8 @@ Process* Kernel::startProcess(const std::string& processName) {
         newProcess->setState(ProcessState::READY);
         m_readyQueue.push(newProcess);
 
-        std::cout << "Process Name: " << newProcess->getPname() << "\n";
-        std::cout << "ID: " << newProcess->getPid() << "\n";
-        std::cout << "Logs:\n";
-        const auto& logBuffer = newProcess->getLogBuffer();
-        if (logBuffer.empty()) {
-            std::cout << "Process log is empty.\n";
-        } else {
-            for (const std::string& logEntry : logBuffer) { // Print each entry in the log
-                std::cout << logEntry << "\n";
-            }
-        }
-        std::cout << "--- End of process log ---\n";
-        std::cout << "Current instruction line: " << newProcess->getCurrentInstructionLine() << "\n";
-        std::cout << "Lines of code: " << newProcess->getTotalInstructionLines() << "\n";
+        clearScreen();
+        displayProcess(newProcess);
     }
     m_cv.notify_one(); // Wake up run() thread if it's waiting
     return newProcess;
@@ -439,20 +414,7 @@ Process* Kernel::startProcess(const std::string& processName) {
 
 void Kernel::printSmi(Process* process) const {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
-    std::cout << "Process Name: " << process->getPname() << "\n";
-    std::cout << "ID: " << process->getPid() << "\n";
-    std::cout << "Logs:\n";
-    const auto& logBuffer = process->getLogBuffer();
-    if (logBuffer.empty()) {
-        std::cout << "Process log is empty.\n";
-    } else {
-        for (const std::string& logEntry : logBuffer) { // Print each entry in the log
-            std::cout << logEntry << "\n";
-        }
-    }
-    std::cout << "--- End of process log ---\n";
-    std::cout << "Current instruction line: " << process->getCurrentInstructionLine() << "\n";
-    std::cout << "Lines of code: " << process->getTotalInstructionLines() << "\n";
+    displayProcess(process);
 }
 
 // I/O APIs
@@ -530,4 +492,22 @@ bool Kernel::isBusy() {
         }
     }
     return false;
+}
+
+void Kernel::displayProcess(Process* process) const {
+    std::cout << "Process Name: " << process->getPname() << "\n";
+    std::cout << "ID: " << process->getPid() << "\n";
+    std::cout << "Logs:\n";
+    const auto& logBuffer = process->getLogBuffer();
+    if (logBuffer.empty()) {
+        std::cout << "Process log is empty.\n";
+    } else {
+        for (const std::string& logEntry : logBuffer) { // Print each entry in the log
+            std::cout << logEntry << "\n";
+        }
+    }
+    std::cout << "--- End of process log ---\n";
+    std::cout << "Current instruction line: " << process->getCurrentInstructionLine() << "\n";
+    std::cout << "Lines of code: " << process->getTotalInstructionLines() << "\n";
+    std::cout << "Memory Required: " << process->getMemoryRequired() << "\n";
 }
