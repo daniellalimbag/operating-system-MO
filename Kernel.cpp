@@ -101,7 +101,7 @@ void Kernel::run() {
         if (m_runningGeneration.load()) {                                           // m_runningGeneration process generation
             if (m_cpuTicks % m_batchProcessFreq == 0) {                             // Process Generation Logic: Only generate if m_running is true
                 std::string newPname = "process" + std::to_string(m_nextPid);
-                Process* newProcess = generateDummyProcess(newPname);
+                Process* newProcess = generateDummyProcess(newPname, 0U);
                 newProcess->setState(ProcessState::READY);
                 m_readyQueue.push(newProcess);
             }
@@ -201,7 +201,7 @@ void Kernel::run() {
 }
 
 // Dummy Process Generator
-Process* Kernel::generateDummyProcess(const std::string& newPname) {
+Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memRequired){
     // No need for mutex because it's only called within run() and startProcess()
     // Use a random number generator
     // static ensures the generator is initialized only once per program run
@@ -231,8 +231,10 @@ Process* Kernel::generateDummyProcess(const std::string& newPname) {
     // A distribution for loop repeats (e.g., 1 to 3 repeats)
     std::uniform_int_distribution<int> distrib_loop_repeats(1, 3);
     // A distribution for memory required (e.g., 64 to 65,536 for uint32_t)
-    std::uniform_int_distribution<uint32_t> distrib_mem_required(m_minMemPerProc, m_maxMemPerProc);
-    uint32_t memRequired = distrib_mem_required(gen);
+    if (memRequired == 0U) {
+        std::uniform_int_distribution<uint32_t> distrib_mem_required(m_minMemPerProc, m_maxMemPerProc);
+        memRequired = distrib_mem_required(gen);
+    }
 
     // Define the types of instructions we can generate
     enum class DummyInstructionType {
@@ -448,11 +450,11 @@ Process* Kernel::reattachToProcess(const std::string& processName) const {
     return foundProcess;
 }
 
-Process* Kernel::startProcess(const std::string& processName) {
+Process* Kernel::startProcess(const std::string& processName, uint32_t memRequired) {
     Process* newProcess;
     {
         std::lock_guard<std::mutex> lock(m_kernelMutex);
-        newProcess = generateDummyProcess(processName);
+        newProcess = generateDummyProcess(processName, memRequired);
         newProcess->setState(ProcessState::READY);
         m_readyQueue.push(newProcess);
 

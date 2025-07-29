@@ -42,10 +42,10 @@ public:
     void stopProcessGeneration();       // scheduler-stop
 
     // Screen Commands
-    void listStatus() const;                                            // screen -ls
-    Process* reattachToProcess(const std::string& processName) const;   // screen -r
-    Process* startProcess(const std::string& processName);              // screen -s
-    void printSmi(Process* process) const;                              // process-smi
+    void listStatus() const;                                                        // screen -ls
+    Process* reattachToProcess(const std::string& processName) const;               // screen -r
+    Process* startProcess(const std::string& processName, uint32_t memRequired);    // screen -s
+    void printSmi(Process* process) const;                                          // process-smi inside screen
 
     // I/O APIs
     void print(const std::string& message) const;
@@ -83,9 +83,9 @@ private:
     uint32_t m_totalFrames;
 
     // Internal Kernel Operations
-    void scheduleProcesses();                                               // Selects and runs a process
-    void updateWaitingProcesses();                                          // Update status of waiting processes (e.g., sleeping)
-    bool isBusy();                                                          // Checks if any core is busy or if there are still processes in the ready queue
-    Process* generateDummyProcess(const std::string& newPname);             // Dummy Process Generation helper
-    void displayProcess(Process* process) const;                            // Prints the details of the process for the screen commands and print-smi
+    void scheduleProcesses();                                                               // Selects and runs a process
+    void updateWaitingProcesses();                                                          // Update status of waiting processes (e.g., sleeping)
+    bool isBusy();                                                                          // Checks if any core is busy or if there are still processes in the ready queue
+    Process* generateDummyProcess(const std::string& newPname, uint32_t memRequired);       // Dummy Process Generation helper
+    void displayProcess(Process* process) const;                                            // Prints the details of the process for the screen commands and print-smi
 };

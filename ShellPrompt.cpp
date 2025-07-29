@@ -133,20 +133,37 @@ void ShellPrompt::processCommand(const std::string& command) {
         }
     } else if (command.rfind("screen -s", 0) == 0) {
         std::istringstream iss(command); // Create a string stream from the command
-        std::string cmd, subCmd, processName;
-        iss >> cmd >> subCmd >> processName; // Extract "screen", "-s", and the process name
+        std::string cmd, subCmd, memStr, processName;
+        uint32_t memValue = 64;
+        iss >> cmd >> subCmd >> memStr >> processName; // Extract "screen", "-s", process memory size, and the process name
 
-        if (!processName.empty()) { // Check if a process name was provided
+        if (!memStr.empty()){
+            std::istringstream tempIss(memStr);
+            unsigned long temp = 0;
+            if (tempIss >> temp && tempIss.eof()) {
+                if (temp >= 64 && temp <= std::numeric_limits<uint32_t>::max()) {
+                    memValue = static_cast<uint32_t>(temp);
+                } else {
+                    kernel.print("Error: Memory size must be a positive integer within the valid range.\n");
+                    return;
+                }
+            } else {
+                kernel.print("Error: Invalid memory size format. Please enter a positive whole number.\n");
+                return;
+            }
+        }
+
+        if (!processName.empty()) {
             Process* processFound = nullptr;
             processFound = kernel.reattachToProcess(processName); // Call a new kernel function to reattach
             if (processFound) {
                 screenMenu(processFound);
             } else {
-                processFound = kernel.startProcess(processName);
+                processFound = kernel.startProcess(processName, memValue);
                 screenMenu(processFound);
             }
         } else {
-            kernel.print("Usage: screen -s <process_name>\n"); // Inform the user of correct usage
+            kernel.print("Usage: screen -s <process_memory_size> <process_name>\n"); // Inform the user of correct usage
         }
     }
     // else if (command == "process-smi") { /* Call kernel.getMemoryUtilizationReport() */ }
@@ -157,13 +174,14 @@ void ShellPrompt::processCommand(const std::string& command) {
 
 void ShellPrompt::showHelp() const {
     kernel.print("\n--- Available Commands ---\n");
-    kernel.print("exit                         - Quits the main OS shell.\n");
-    kernel.print("help                         - Displays this help message.\n");
-    kernel.print("echo                         - A simple placeholder command.\n");
-    kernel.print("clear                        - Clears the terminal screen.\n");
-    kernel.print("scheduler-start              - Starts automatic process generation.\n");
-    kernel.print("scheduler-stop               - Stops automatic process generation.\n");
-    kernel.print("screen -ls                   - Lists CPU utilization, core usage, and a summary of all running and finished processes\n");
-    kernel.print("screen -r <process_name>     - Reattach to the screen of an existing process\n");
+    kernel.print("exit                                              - Quits the main OS shell.\n");
+    kernel.print("help                                              - Displays this help message.\n");
+    kernel.print("echo                                              - A simple placeholder command.\n");
+    kernel.print("clear                                             - Clears the terminal screen.\n");
+    kernel.print("scheduler-start                                   - Starts automatic process generation.\n");
+    kernel.print("scheduler-stop                                    - Stops automatic process generation.\n");
+    kernel.print("screen -ls                                        - Lists CPU utilization, core usage, and a summary of all running and finished processes\n");
+    kernel.print("screen -r <process_name>                          - Reattach to the screen of an existing process\n");
+    kernel.print("screen -s <process_memory_size> <process_name>    - Start a new process\n");
     kernel.print("--------------------------\n\n");
 }
