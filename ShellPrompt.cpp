@@ -183,5 +183,6 @@ void ShellPrompt::showHelp() const {
     kernel.print("screen -ls                                        - Lists CPU utilization, core usage, and a summary of all running and finished processes\n");
     kernel.print("screen -r <process_name>                          - Reattach to the screen of an existing process\n");
     kernel.print("screen -s <process_memory_size> <process_name>    - Start a new process\n");
+    kernel.print("process-smi                                       - Print a summarized view of the memory allocation and CPU utilization\n");
     kernel.print("--------------------------\n\n");
 }
