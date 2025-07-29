@@ -166,7 +166,9 @@ void ShellPrompt::processCommand(const std::string& command) {
             kernel.print("Usage: screen -s <process_memory_size> <process_name>\n"); // Inform the user of correct usage
         }
     } else if (command == "process-smi") {
-        kernel.getMemoryUtilizationReport();
+        kernel.printMemoryUtilizationReport();
+    } else if (command == "vmstat") {
+        kernel.printMemoryStatistics();
     } else {
         kernel.print("Unknown command: '" + command + "'. Type 'help' for assistance.\n");
     }
@@ -184,5 +186,6 @@ void ShellPrompt::showHelp() const {
     kernel.print("screen -r <process_name>                          - Reattach to the screen of an existing process\n");
     kernel.print("screen -s <process_memory_size> <process_name>    - Start a new process\n");
     kernel.print("process-smi                                       - Print a summarized view of the memory allocation and CPU utilization\n");
+    kernel.print("vmstat                                            - Print a detailed view of the memory allocation\n");
     kernel.print("--------------------------\n\n");
 }

@@ -11,6 +11,9 @@ Kernel::Kernel()
     : m_nextPid(1U),
       m_cpuTicks(0ULL),
       m_isInitialized(false),
+      m_activeTicks(0ULL),
+      m_numPagedIn(0ULL),
+      m_numPagedOut(0ULL),
       m_runningGeneration(false),
       m_shutdownRequested(false),
       m_numCpus(4U),
@@ -112,6 +115,7 @@ void Kernel::run() {
         updateWaitingProcesses();    // Update status of waiting processes (e.g., sleeping)
         scheduleProcesses();                                                        // CPU Process Scheduling
         if (m_cpuTicks % (m_delaysPerExec + 1ULL) == 0ULL) {                        // Cpu Core Process Execution
+            bool executeSuccess = false;
             for (auto& core : m_cpuCores) {
                 if (core.isBusy && core.currentProcess != nullptr) {
                     Process* p = core.currentProcess;
@@ -133,7 +137,7 @@ void Kernel::run() {
                         uint32_t pageCounter = 0U;
                         for (framePointer = 0U; framePointer < m_totalFrames; ++framePointer) {
                             if (m_pageTable[framePointer] == 0U) {
-                                pageCounter++;
+                                ++pageCounter;
                                 if (pageCounter >= pagesRequired) {
                                     break;
                                 }
@@ -150,12 +154,14 @@ void Kernel::run() {
                                 m_pageTable[framePointer] = p->getPid();
                                 --framePointer;
                                 --pageCounter;
+                                ++m_numPagedIn;
                             }
                             ++framePointer;
                             //std::cout << "Page fault handling success, Frame Pointer at " << framePointer << "\n";
                         }
                     }
                     p->executeNextInstruction(core.id);
+                    executeSuccess = true;
                     //std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " executed at frames " << framePointer << " to " << framePointer + pagesRequired - 1 << ".\n";
                     if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
                         core.currentQuantumTicks++;                                 // Increment quantum only for Round Robin
@@ -168,6 +174,7 @@ void Kernel::run() {
                             core.isBusy = false;
                             for (uint32_t i = 0; i < pagesRequired; ++i) {
                                 m_pageTable[framePointer++] = 0U;
+                                ++m_numPagedOut;
                             }
                         }
                     } else if (p->isFinished()) {                                   // Checks if process completed all of its instructions
@@ -176,6 +183,7 @@ void Kernel::run() {
                         core.currentQuantumTicks = 0U;
                         for (uint32_t i = 0; i < pagesRequired; ++i) {
                             m_pageTable[framePointer++] = 0U;
+                            ++m_numPagedOut;
                         }
                     } else if (m_schedulerType == SchedulerType::ROUND_ROBIN && core.currentQuantumTicks >= m_quantumCycles) {
                         // Quantum expired for this process in Round Robin mode
@@ -186,12 +194,16 @@ void Kernel::run() {
                         core.currentQuantumTicks = 0U;
                         for (uint32_t i = 0; i < pagesRequired; ++i) {
                             m_pageTable[framePointer++] = 0U;
+                            ++m_numPagedOut;
                         }
                     }
                 }
             }
+            if (executeSuccess) {
+                ++m_activeTicks;
+            }
         }
-        m_cpuTicks++;
+        ++m_cpuTicks;
 
         lock.unlock(); // Release the lock before sleeping
 
@@ -472,7 +484,7 @@ void Kernel::printSmi(Process* process) const {
     displayProcess(process);
 }
 
-void Kernel::getMemoryUtilizationReport() const {
+void Kernel::printMemoryUtilizationReport() const {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
     uint32_t coresBusy = 0;
     for(const auto& core: m_cpuCores) {
@@ -488,9 +500,8 @@ void Kernel::getMemoryUtilizationReport() const {
         }
     }
     std::cout << "CPU Utilization: " << ((static_cast<float>(coresBusy) / static_cast<float>(m_numCpus)) * 100.0f) << "\%\n";
+    std::cout << "Memory Usage: " << framesOccupied * m_memPerFrame << "B/" << m_maxOverallMem << "B\n";
     std::cout << "Memory Utilization: " << ((static_cast<float>(framesOccupied) / static_cast<float>(m_totalFrames)) * 100.0f) << "\%\n";
-    std::cout << "Total Memory: " << m_maxOverallMem << "B\n";
-    std::cout << "Available Memory: " << m_maxOverallMem - framesOccupied * m_memPerFrame << "B\n";
     std::cout << "Memory per frame: " << m_memPerFrame << "B \n";
 
     std::cout << "\n----------------------------------------\n";
@@ -499,6 +510,26 @@ void Kernel::getMemoryUtilizationReport() const {
         std::cout << "Frame " << i << ": " << ((processId != 0) ? ("Process " + std::to_string(processId) + "\n"):"Unoccupied\n");
     }
     std::cout << "----------------------------------------\n";
+}
+
+void Kernel::printMemoryStatistics() const {
+    std::lock_guard<std::mutex> lock(m_kernelMutex);
+
+    uint32_t framesOccupied = 0;
+    for(uint32_t frame : m_pageTable) {
+        if (frame!=0) {
+            ++framesOccupied;
+        }
+    }
+    std::cout << "Total Memory: " << m_maxOverallMem << "B\n";
+    std::cout << "Used Memory: " << framesOccupied * m_memPerFrame << "B\n";
+    std::cout << "Available Memory: " << m_maxOverallMem - framesOccupied * m_memPerFrame << "B\n";
+    std::cout << "Memory per frame: " << m_memPerFrame << "B \n";
+    std::cout << "Total CPU Ticks: " << m_cpuTicks << "\n";
+    std::cout << "Active CPU Ticks: " << m_activeTicks << "\n";
+    std::cout << "Idle CPU Ticks: " << m_cpuTicks - m_activeTicks << "\n";
+    std::cout << "Pages swapped in: " << m_numPagedIn << "\n";
+    std::cout << "Pages swapped Out: " << m_numPagedOut << "\n";
 }
 
 // I/O APIs
@@ -534,9 +565,7 @@ void Kernel::scheduleProcesses() {
                 core.currentQuantumTicks = 0U;                      // Reset quantum counter for this newly assigned process
                 p_to_schedule->setState(ProcessState::RUNNING);     // Set process as running so it can execute
 
-                /*
-                std::cout << "[Scheduler] Assigned Process " << p_to_schedule->getPname() << " (PID " << p_to_schedule->getPid() << ") to Core " << core.id << ".\n";
-                */
+                //std::cout << "[Scheduler] Assigned Process " << p_to_schedule->getPname() << " (PID " << p_to_schedule->getPid() << ") to Core " << core.id << ".\n";
             }
         }
     }

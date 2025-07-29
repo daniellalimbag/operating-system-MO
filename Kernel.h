@@ -47,7 +47,8 @@ public:
     Process* startProcess(const std::string& processName, uint32_t memRequired);    // screen -s
     void printSmi(Process* process) const;                                          // process-smi inside screen
 
-    void getMemoryUtilizationReport() const;                                        // process-smi
+    void printMemoryUtilizationReport() const;                                      // process-smi
+    void printMemoryStatistics() const;                                             // vmstat
 
     // I/O APIs
     void print(const std::string& message) const;
@@ -57,8 +58,11 @@ public:
 private:
     std::vector<std::unique_ptr<Process>> m_processes;  // Stores all processes managed by the kernel
     uint32_t m_nextPid;                                 // Counter for assigning unique PIDs
-    unsigned long long m_cpuTicks;                      // Represents the system's conceptual time progression
+    uint64_t m_cpuTicks;                                // Represents the system's conceptual time progression
     std::atomic<bool> m_isInitialized;                  // Initialized flag for run() to wait before initialization
+    uint64_t m_activeTicks;                             // Represents the amount of active CPU ticks for vmstat
+    uint64_t m_numPagedIn;                              // Represents the amount of times pages were switched in
+    uint64_t m_numPagedOut;                             // Represents the amount of times pages were switched out
 
     mutable std::mutex m_kernelMutex;           // Mutex to protect access to Kernel's shared data members
     std::atomic<bool> m_runningGeneration;      // Atomic flag to signal the kernel thread to stop generating dummy processes
