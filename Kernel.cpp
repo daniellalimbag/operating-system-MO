@@ -5,9 +5,10 @@
 #include <algorithm>
 #include <random>
 #include <limits>
+#include <cmath>
 
 Kernel::Kernel()
-    : m_nextPid(1),
+    : m_nextPid(1U),
       m_cpuTicks(0ULL),
       m_isInitialized(false),
       m_runningGeneration(false),
@@ -58,9 +59,9 @@ void Kernel::initialize(const SystemConfig& config) {
         m_isInitialized.store(true); // Set the flag to true
 
         // --- Initialize Page Table ---
-        uint32_t totalFrames = m_maxOverallMem / m_memPerFrame;
-        m_pageTable.reserve(totalFrames);
-        std::cout << "Kernel: Page Table initialized with " << totalFrames << " total frames.\n";
+        m_totalFrames = m_maxOverallMem / m_memPerFrame;
+        m_pageTable.resize(m_totalFrames);
+        std::cout << "Kernel: Page Table initialized with " << m_totalFrames << " total frames.\n";
     }
 
     m_cv.notify_one();           // Notify the run() thread that initialization is complete
@@ -99,9 +100,8 @@ void Kernel::run() {
 
         if (m_runningGeneration.load()) {                                           // m_runningGeneration process generation
             if (m_cpuTicks % m_batchProcessFreq == 0) {                             // Process Generation Logic: Only generate if m_running is true
-                int newPid = m_nextPid++;                                           // Get next available PID and increment
-                std::string newPname = "process" + std::to_string(newPid);
-                Process* newProcess = generateDummyProcess(newPname, newPid);
+                std::string newPname = "process" + std::to_string(m_nextPid);
+                Process* newProcess = generateDummyProcess(newPname);
                 newProcess->setState(ProcessState::READY);
                 m_readyQueue.push(newProcess);
             }
@@ -109,31 +109,76 @@ void Kernel::run() {
 
         updateWaitingProcesses();                                                   // Update status of waiting processes (e.g., sleeping)
         scheduleProcesses();                                                        // CPU Process Scheduling
-        if (m_cpuTicks % (m_delaysPerExec + 1ULL) == 0) {                           // Cpu Core Process Execution
+        if (m_cpuTicks % (m_delaysPerExec + 1ULL) == 0ULL) {                        // Cpu Core Process Execution
             for (auto& core : m_cpuCores) {
                 if (core.isBusy && core.currentProcess != nullptr) {
                     Process* p = core.currentProcess;
-                    p->executeNextInstruction(core.id);                                    // A process can only be running if it's assigned to a core
+                    uint32_t framePointer;
+                    uint32_t pagesRequired = static_cast<uint32_t>(std::ceilf(static_cast<float>(p->getMemoryRequired()) / static_cast<float>(m_memPerFrame)));
+                    for (framePointer = 0; framePointer < m_totalFrames; ++framePointer) {
+                        if (m_pageTable[framePointer] == p->getPid()) {
+                            break;
+                        }
+                    }
+                    if (framePointer == m_totalFrames) {
+                        // refactor it to this:
+                        // framePointer = doPageFaultHandling(pagesRequired);
+                        // if (framePointer == m_totalFrames) continue;                 // if couldn't find victim frame, don't execute
+                        uint32_t pageCounter = 0;
+                        for (framePointer = 0; framePointer < m_totalFrames; ++framePointer) {
+                            if (m_pageTable[framePointer] == 0) {
+                                pageCounter++;
+                                if (pageCounter >= pagesRequired) {
+                                    break;
+                                }
+                                continue;
+                            } else {
+                                pageCounter = 0;
+                            }
+                        }
+                        if (framePointer == m_totalFrames && pageCounter < pagesRequired) {
+                            std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " could not be executed\n";
+                            continue;
+                        } else {
+                            while (pageCounter > 0) {
+                                m_pageTable[framePointer] = p->getPid();
+                                --framePointer;
+                                --pageCounter;
+                            }
+                            ++framePointer;
+                            //std::cout << "Page fault handling success, Frame Pointer at " << framePointer << "\n";
+                        }
+                    }
+                    p->executeNextInstruction(core.id);
+                    std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " executed at base frame " << framePointer << "\n";
                     if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
                         core.currentQuantumTicks++;                                 // Increment quantum only for Round Robin
                     }
                     if (p->getState() == ProcessState::WAITING) {
+                        p->setState(ProcessState::WAITING);
+                        m_waitingQueue.push_back(p);                            // Process is pushed back to waiting queue
                         core.currentProcess = nullptr;                              // Core is now free
                         core.isBusy = false;
-                        p->setState(ProcessState::WAITING);
-                        m_waitingQueue.push_back(p);                            // Process is pushed back to ready queue
+                        for (uint32_t pageCounter = 0; pageCounter < pagesRequired; ++pageCounter) {
+                            m_pageTable[framePointer++] = 0;
+                        }
                     } else if (p->isFinished()) {                                   // Checks if process completed all of its instructions
                         core.currentProcess = nullptr;
                         core.isBusy = false;
-                        core.currentQuantumTicks = 0;
-                        // Consider adding p to a m_terminatedProcesses list for easier iteration later
+                        core.currentQuantumTicks = 0U;
+                        for (uint32_t pageCounter = 0; pageCounter < pagesRequired; ++pageCounter) {
+                            m_pageTable[framePointer++] = 0;
+                        }
                     } else if (m_schedulerType == SchedulerType::ROUND_ROBIN && core.currentQuantumTicks >= m_quantumCycles) {
                         // Quantum expired for this process in Round Robin mode
                         p->setState(ProcessState::READY);                           // Preempt process
                         m_readyQueue.push(p);
                         core.currentProcess = nullptr;                              // Free the core
                         core.isBusy = false;
-                        core.currentQuantumTicks = 0;
+                        core.currentQuantumTicks = 0U;
+                        for (uint32_t pageCounter = 0; pageCounter < pagesRequired; ++pageCounter) {
+                            m_pageTable[framePointer++] = 0;
+                        }
                     }
                 }
             }
@@ -150,7 +195,7 @@ void Kernel::run() {
 }
 
 // Dummy Process Generator
-Process* Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
+Process* Kernel::generateDummyProcess(const std::string& newPname) {
     // No need for mutex because it's only called within run() and startProcess()
     // Use a random number generator
     // static ensures the generator is initialized only once per program run
@@ -260,6 +305,7 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, int newPid) {
     }
 
     // Create the process using std::make_unique
+    uint32_t newPid = m_nextPid++;
     std::unique_ptr<Process> newProcess = std::make_unique<Process>(newPid, newPname, memRequired, std::move(instructions));
 
     // Get a raw pointer to the process before moving ownership to m_processes
@@ -400,8 +446,7 @@ Process* Kernel::startProcess(const std::string& processName) {
     Process* newProcess;
     {
         std::lock_guard<std::mutex> lock(m_kernelMutex);
-        int newPid = m_nextPid++; // Get next available PID and increment
-        newProcess = generateDummyProcess(processName, newPid);
+        newProcess = generateDummyProcess(processName);
         newProcess->setState(ProcessState::READY);
         m_readyQueue.push(newProcess);
 

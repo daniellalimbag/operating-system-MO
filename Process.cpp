@@ -6,7 +6,7 @@
 #include <limits>
 #include <algorithm>
 
-Process::Process(int id, std::string processName, uint32_t memoryRequired, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds)
+Process::Process(uint32_t id, std::string processName, uint32_t memoryRequired, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds)
     : m_pid(id),
       m_processName(processName),
       m_memoryRequired(memoryRequired),

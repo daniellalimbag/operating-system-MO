@@ -54,7 +54,7 @@ public:
 
 private:
     std::vector<std::unique_ptr<Process>> m_processes;  // Stores all processes managed by the kernel
-    int m_nextPid;                                      // Counter for assigning unique PIDs
+    uint32_t m_nextPid;                                 // Counter for assigning unique PIDs
     unsigned long long m_cpuTicks;                      // Represents the system's conceptual time progression
     std::atomic<bool> m_isInitialized;                  // Initialized flag for run() to wait before initialization
 
@@ -79,12 +79,13 @@ private:
     std::vector<CPUCore> m_cpuCores;            // Virtual representation of CPU cores
     std::queue<Process*> m_readyQueue;          // Virtual representation of the ready queue for scheduling
     std::vector<Process*> m_waitingQueue;       // Pointers to handle waiting processes before putting in the ready queue
-    std::vector<int> m_pageTable;               // Virtual representation of the page table. Index = Frame, Value = Process it's assigned to
+    std::vector<uint32_t> m_pageTable;          // Virtual representation of the page table. Index = Frame, Value = Process ID
+    uint32_t m_totalFrames;
 
     // Internal Kernel Operations
     void scheduleProcesses();                                               // Selects and runs a process
     void updateWaitingProcesses();                                          // Update status of waiting processes (e.g., sleeping)
     bool isBusy();                                                          // Checks if any core is busy or if there are still processes in the ready queue
-    Process* generateDummyProcess(const std::string& newPname, int newPid); // Dummy Process Generation helper
+    Process* generateDummyProcess(const std::string& newPname);             // Dummy Process Generation helper
     void displayProcess(Process* process) const;                            // Prints the details of the process for the screen commands and print-smi
 };

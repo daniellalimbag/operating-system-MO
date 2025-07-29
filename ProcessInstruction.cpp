@@ -71,7 +71,7 @@ void PrintInstruction::execute(Process& process) {
     uint32_t coreId = process.getCurrentExecutionCoreId();
 
     // Prepend timestamp and core ID to the output message
-    std::string prefix = "  [" + formatted_time + "] [Core: " + std::to_string(coreId) + "] "; //
+    std::string prefix = "  [" + formatted_time + "] [Core " + std::to_string(coreId) + "] "; //
     output.insert(0, prefix);
 
     // Find and replace '+var' syntax for variable interpolation
