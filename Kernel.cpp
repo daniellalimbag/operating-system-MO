@@ -474,15 +474,21 @@ void Kernel::printSmi(Process* process) const {
 
 void Kernel::getMemoryUtilizationReport() const {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
+    uint32_t coresBusy = 0;
+    for(const auto& core: m_cpuCores) {
+        if (core.isBusy) {
+            ++coresBusy;
+        }
+    }
+
     uint32_t framesOccupied = 0;
     for(uint32_t frame : m_pageTable) {
         if (frame!=0) {
             ++framesOccupied;
         }
     }
+    std::cout << "CPU Utilization: " << ((static_cast<float>(coresBusy) / static_cast<float>(m_numCpus)) * 100.0f) << "\%\n";
     std::cout << "Memory Utilization: " << ((static_cast<float>(framesOccupied) / static_cast<float>(m_totalFrames)) * 100.0f) << "\%\n";
-    std::cout << "Frames occupied: " << framesOccupied << "\n";
-    std::cout << "Frames available: " << m_totalFrames - framesOccupied << "\n";
     std::cout << "Total Memory: " << m_maxOverallMem << "B\n";
     std::cout << "Available Memory: " << m_maxOverallMem - framesOccupied * m_memPerFrame << "B\n";
     std::cout << "Memory per frame: " << m_memPerFrame << "B \n";
