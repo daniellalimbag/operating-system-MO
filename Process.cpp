@@ -29,10 +29,8 @@ bool Process::isFinished() const {
 void Process::setSleepTicks(uint8_t ticks) {
     if (ticks > 0) {
         m_sleepTicksRemaining = ticks;
-        setState(ProcessState::WAITING);
     } else {
         m_sleepTicksRemaining = 0;
-        setState(ProcessState::READY); // If ticks <= 0, ready to run immediately
     }
 }
 
@@ -98,15 +96,11 @@ void Process::executeNextInstruction(uint32_t coreId) {
                 m_programCounter++;
             }
 
-        } else {
-            setState(ProcessState::TERMINATED);
-            std::cout << "[Process " << getPid() << "] All main instructions executed. Transitioning to TERMINATED.\n"; // this should not output
         }
     }
 
     if (m_programCounter >= m_instructions.size() && m_loopStack.empty()) {
         m_sleepTicksRemaining = 0;
-        setState(ProcessState::TERMINATED);
     }
 }
 

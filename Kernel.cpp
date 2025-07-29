@@ -107,15 +107,19 @@ void Kernel::run() {
             }
         }
 
-        updateWaitingProcesses();                                                   // Update status of waiting processes (e.g., sleeping)
+        updateWaitingProcesses();    // Update status of waiting processes (e.g., sleeping)
         scheduleProcesses();                                                        // CPU Process Scheduling
         if (m_cpuTicks % (m_delaysPerExec + 1ULL) == 0ULL) {                        // Cpu Core Process Execution
             for (auto& core : m_cpuCores) {
                 if (core.isBusy && core.currentProcess != nullptr) {
                     Process* p = core.currentProcess;
+                    if (p->getState() != ProcessState::RUNNING) {
+                        //std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " still waiting.\n";
+                        continue;
+                    }
                     uint32_t framePointer;
                     uint32_t pagesRequired = static_cast<uint32_t>(std::ceilf(static_cast<float>(p->getMemoryRequired()) / static_cast<float>(m_memPerFrame)));
-                    for (framePointer = 0; framePointer < m_totalFrames; ++framePointer) {
+                    for (framePointer = 0U; framePointer < m_totalFrames; ++framePointer) {
                         if (m_pageTable[framePointer] == p->getPid()) {
                             break;
                         }
@@ -124,23 +128,23 @@ void Kernel::run() {
                         // refactor it to this:
                         // framePointer = doPageFaultHandling(pagesRequired);
                         // if (framePointer == m_totalFrames) continue;                 // if couldn't find victim frame, don't execute
-                        uint32_t pageCounter = 0;
-                        for (framePointer = 0; framePointer < m_totalFrames; ++framePointer) {
-                            if (m_pageTable[framePointer] == 0) {
+                        uint32_t pageCounter = 0U;
+                        for (framePointer = 0U; framePointer < m_totalFrames; ++framePointer) {
+                            if (m_pageTable[framePointer] == 0U) {
                                 pageCounter++;
                                 if (pageCounter >= pagesRequired) {
                                     break;
                                 }
                                 continue;
                             } else {
-                                pageCounter = 0;
+                                pageCounter = 0U;
                             }
                         }
                         if (framePointer == m_totalFrames && pageCounter < pagesRequired) {
-                            std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " could not be executed\n";
+                            //std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " could not be executed.\n";
                             continue;
                         } else {
-                            while (pageCounter > 0) {
+                            while (pageCounter > 0U) {
                                 m_pageTable[framePointer] = p->getPid();
                                 --framePointer;
                                 --pageCounter;
@@ -150,24 +154,26 @@ void Kernel::run() {
                         }
                     }
                     p->executeNextInstruction(core.id);
-                    std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " executed at base frame " << framePointer << "\n";
+                    //std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " executed at frames " << framePointer << " to " << framePointer + pagesRequired - 1 << ".\n";
                     if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
                         core.currentQuantumTicks++;                                 // Increment quantum only for Round Robin
                     }
-                    if (p->getState() == ProcessState::WAITING) {
+                    if (p->getSleepTicksRemaining() > 0) {
                         p->setState(ProcessState::WAITING);
-                        m_waitingQueue.push_back(p);                            // Process is pushed back to waiting queue
-                        core.currentProcess = nullptr;                              // Core is now free
-                        core.isBusy = false;
-                        for (uint32_t pageCounter = 0; pageCounter < pagesRequired; ++pageCounter) {
-                            m_pageTable[framePointer++] = 0;
+                        m_waitingQueue.push_back(p);
+                        if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
+                            core.currentProcess = nullptr;
+                            core.isBusy = false;
+                            for (uint32_t i = 0; i < pagesRequired; ++i) {
+                                m_pageTable[framePointer++] = 0U;
+                            }
                         }
                     } else if (p->isFinished()) {                                   // Checks if process completed all of its instructions
                         core.currentProcess = nullptr;
                         core.isBusy = false;
                         core.currentQuantumTicks = 0U;
-                        for (uint32_t pageCounter = 0; pageCounter < pagesRequired; ++pageCounter) {
-                            m_pageTable[framePointer++] = 0;
+                        for (uint32_t i = 0; i < pagesRequired; ++i) {
+                            m_pageTable[framePointer++] = 0U;
                         }
                     } else if (m_schedulerType == SchedulerType::ROUND_ROBIN && core.currentQuantumTicks >= m_quantumCycles) {
                         // Quantum expired for this process in Round Robin mode
@@ -176,8 +182,8 @@ void Kernel::run() {
                         core.currentProcess = nullptr;                              // Free the core
                         core.isBusy = false;
                         core.currentQuantumTicks = 0U;
-                        for (uint32_t pageCounter = 0; pageCounter < pagesRequired; ++pageCounter) {
-                            m_pageTable[framePointer++] = 0;
+                        for (uint32_t i = 0; i < pagesRequired; ++i) {
+                            m_pageTable[framePointer++] = 0U;
                         }
                     }
                 }
@@ -504,27 +510,28 @@ void Kernel::scheduleProcesses() {
 }
 
 void Kernel::updateWaitingProcesses() {
-    // Use a temporary list for processes that become ready
-    std::vector<Process*> processesToMoveToReady;
-    // Iterate through m_waitingQueue and identify those that are done sleeping
-    for (Process* p : m_waitingQueue) { // Iterate m_waitingQueue directly
-        p->decrementSleepTicks();
-        if (p->getSleepTicksRemaining() == 0) {
+    std::vector<Process*> processesToMoveToReady; // Temporary list for ready processes
+
+    auto new_end = std::remove_if(m_waitingQueue.begin(), m_waitingQueue.end(),
+                                  [&](Process* p) {
+                                      p->decrementSleepTicks();
+                                      if (p->getSleepTicksRemaining() == 0) {
+                                          processesToMoveToReady.push_back(p);
+                                          return true;
+                                      }
+                                      return false;
+                                  });
+
+    m_waitingQueue.erase(new_end, m_waitingQueue.end());
+
+    for (Process* p : processesToMoveToReady) {
+        if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
             p->setState(ProcessState::READY);
-            processesToMoveToReady.push_back(p); // Collect processes to move
+            m_readyQueue.push(p);
+        } else {
+            p->setState(ProcessState::RUNNING);
         }
     }
-
-    // Move processes from temporary list to m_readyQueue
-    for (Process* p : processesToMoveToReady) {
-        m_readyQueue.push(p);
-    }
-
-    // Remove processes that just became READY from m_waitingQueue
-    m_waitingQueue.erase(std::remove_if(m_waitingQueue.begin(), m_waitingQueue.end(),
-                                            [](Process* p) {
-                                                return p->getState() == ProcessState::READY;
-                                            }), m_waitingQueue.end());
 }
 
 bool Kernel::isBusy() {
