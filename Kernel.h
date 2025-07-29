@@ -47,6 +47,8 @@ public:
     Process* startProcess(const std::string& processName, uint32_t memRequired);    // screen -s
     void printSmi(Process* process) const;                                          // process-smi inside screen
 
+    void getMemoryUtilizationReport() const;                                        // process-smi
+
     // I/O APIs
     void print(const std::string& message) const;
     std::string readLine(const std::string& prompt) const;

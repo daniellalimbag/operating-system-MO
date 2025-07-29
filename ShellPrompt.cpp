@@ -165,9 +165,9 @@ void ShellPrompt::processCommand(const std::string& command) {
         } else {
             kernel.print("Usage: screen -s <process_memory_size> <process_name>\n"); // Inform the user of correct usage
         }
-    }
-    // else if (command == "process-smi") { /* Call kernel.getMemoryUtilizationReport() */ }
-    else {
+    } else if (command == "process-smi") {
+        kernel.getMemoryUtilizationReport();
+    } else {
         kernel.print("Unknown command: '" + command + "'. Type 'help' for assistance.\n");
     }
 }

@@ -50,6 +50,7 @@ void Kernel::initialize(const SystemConfig& config) {
             m_cpuCores[i].isBusy = false;
             m_cpuCores[i].currentQuantumTicks = 0U;
         }
+        std::cout << "\n----------------------------------------\n";
         std::cout << "Kernel: Kernel initialized with " << m_numCpus << " CPU cores.\n";
         /*
         for (const auto& core: m_cpuCores) {
@@ -62,6 +63,7 @@ void Kernel::initialize(const SystemConfig& config) {
         m_totalFrames = m_maxOverallMem / m_memPerFrame;
         m_pageTable.resize(m_totalFrames);
         std::cout << "Kernel: Page Table initialized with " << m_totalFrames << " total frames.\n";
+        std::cout << "----------------------------------------\n";
     }
 
     m_cv.notify_one();           // Notify the run() thread that initialization is complete
@@ -468,6 +470,29 @@ Process* Kernel::startProcess(const std::string& processName, uint32_t memRequir
 void Kernel::printSmi(Process* process) const {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
     displayProcess(process);
+}
+
+void Kernel::getMemoryUtilizationReport() const {
+    std::lock_guard<std::mutex> lock(m_kernelMutex);
+    uint32_t framesOccupied = 0;
+    for(uint32_t frame : m_pageTable) {
+        if (frame!=0) {
+            ++framesOccupied;
+        }
+    }
+    std::cout << "Memory Utilization: " << ((static_cast<float>(framesOccupied) / static_cast<float>(m_totalFrames)) * 100.0f) << "\%\n";
+    std::cout << "Frames occupied: " << framesOccupied << "\n";
+    std::cout << "Frames available: " << m_totalFrames - framesOccupied << "\n";
+    std::cout << "Total Memory: " << m_maxOverallMem << "B\n";
+    std::cout << "Available Memory: " << m_maxOverallMem - framesOccupied * m_memPerFrame << "B\n";
+    std::cout << "Memory per frame: " << m_memPerFrame << "B \n";
+
+    std::cout << "\n----------------------------------------\n";
+    for (uint32_t i = 0; i < m_totalFrames; ++i) {
+        uint32_t processId = m_pageTable[i];
+        std::cout << "Frame " << i << ": " << ((processId != 0) ? ("Process " + std::to_string(processId) + "\n"):"Unoccupied\n");
+    }
+    std::cout << "----------------------------------------\n";
 }
 
 // I/O APIs
