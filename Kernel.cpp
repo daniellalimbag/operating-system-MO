@@ -28,10 +28,12 @@ Kernel::Kernel()
       m_minMemPerProc(64U),
       m_maxMemPerProc(64U) {}
 
+// ===================================================
 // Core Lifecycle Methods
+// ===================================================
 void Kernel::initialize(const SystemConfig& config) {
     {
-        std::lock_guard<std::mutex> lock(m_kernelMutex); // This lock ensures that no other thread is modifying kernel state
+        std::lock_guard<std::mutex> lock(m_kernelMutex);
         m_numCpus = config.numCPUs;
         m_schedulerType = config.scheduler;
         m_quantumCycles = config.quantumCycles;
@@ -44,12 +46,11 @@ void Kernel::initialize(const SystemConfig& config) {
         m_minMemPerProc = config.minMemPerProc;
         m_maxMemPerProc = config.maxMemPerProc;
 
-        // --- Initialize CPU Cores ---
-        m_cpuCores.clear(); // Clear any existing cores
-        m_cpuCores.resize(m_numCpus); // Create the specified number of cores
+        m_cpuCores.clear();
+        m_cpuCores.resize(m_numCpus);
         for (uint32_t i = 0; i < m_numCpus; ++i) {
             m_cpuCores[i].id = i;
-            m_cpuCores[i].currentProcess = nullptr; // No process initially assigned
+            m_cpuCores[i].currentProcess = nullptr;
             m_cpuCores[i].isBusy = false;
             m_cpuCores[i].currentQuantumTicks = 0U;
         }
@@ -60,16 +61,14 @@ void Kernel::initialize(const SystemConfig& config) {
             std::cout << "Core " << core.id << "\n";
         }
         */
-        m_isInitialized.store(true); // Set the flag to true
-
-        // --- Initialize Page Table ---
+        m_isInitialized.store(true);
         m_totalFrames = m_maxOverallMem / m_memPerFrame;
         m_pageTable.resize(m_totalFrames);
         std::cout << "Kernel: Page Table initialized with " << m_totalFrames << " total frames.\n";
         std::cout << "----------------------------------------\n";
     }
 
-    m_cv.notify_one();           // Notify the run() thread that initialization is complete
+    m_cv.notify_one();
 }
 
 void Kernel::shutdown() {
@@ -539,7 +538,7 @@ void Kernel::print(const std::string& message) const {
 
 std::string Kernel::readLine(const std::string& prompt) const {
     std::string inputLine;
-    std::cout << prompt;
+    std::cout << prompt << " ";
     std::getline(std::cin, inputLine);
 
     return inputLine;

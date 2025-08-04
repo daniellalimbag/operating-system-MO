@@ -1,9 +1,15 @@
 #pragma once
 
 #include <string>
+#include <functional>
+#include <vector>
+#include <map>
 
-class Kernel; // Forward declaration of Kernel class.
+class Kernel;
 class Process;
+struct ParsedCommand;
+
+using CommandHandler = std::function<bool(const std::vector<std::string>&)>;
 
 /**
  * @class ShellPrompt
@@ -12,12 +18,21 @@ class Process;
 class ShellPrompt {
 public:
     explicit ShellPrompt(Kernel& kernel);
-    void start();
+    void run();
 
 private:
-    Kernel& kernel; // Reference to the OS kernel for accessing its services.
+    Kernel& kernel;
+    std::map<std::string, CommandHandler> commandHandlers;
 
-    void processCommand(const std::string& command);
-    void screenMenu(Process* process);
+    void showHeader(const std::string& instructions) const;
+    bool runInitialBootPrompt(const std::string& prompt);
+    void initializeKernel();
+    void runMainShellLoop(const std::string& prompt);
+    ParsedCommand parseCommand(const std::string& command);
+    bool executeCommand(const ParsedCommand& parsed);
     void showHelp() const;
+    void setupCommands();
+    void handleScreenReattach(const std::vector<std::string>& args);
+    void handleScreenStart(const std::vector<std::string>& args);
+    void handleScreenMenu(Process* process);
 };

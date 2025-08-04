@@ -19,7 +19,7 @@ int main() {
     std::thread kernelThread(&Kernel::run, &kernel);    // start the main kernel background thread
 
     ShellPrompt shellPrompt(kernel);                                    // Shell interacts with the initialized kernel
-    std::thread shellPromptThread(&ShellPrompt::start, &shellPrompt);   // starts the CLI thread
+    std::thread shellPromptThread(&ShellPrompt::run, &shellPrompt);     // starts the CLI thread
 
     shellPromptThread.join();       // wait until user types 'exit'
     kernel.shutdown();              // signal the kernel to shutdown

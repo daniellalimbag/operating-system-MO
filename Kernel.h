@@ -17,10 +17,10 @@
  * @brief Represents a single CPU core in the emulator.
  */
 struct CPUCore {
-    uint32_t id; // Unique identifier for the core (e.g., 0, 1, 2...)
-    Process* currentProcess; // Pointer to the process currently running on this core
-    bool isBusy;             // True if the core is currently executing a process
-    uint32_t currentQuantumTicks; // New: Tracks ticks consumed in current quantum for currentProcess
+    uint32_t id;
+    Process* currentProcess;
+    bool isBusy;
+    uint32_t currentQuantumTicks;
 };
 
 /**
@@ -54,6 +54,7 @@ public:
     void print(const std::string& message) const;
     std::string readLine(const std::string& prompt) const;
     void clearScreen() const;
+    bool getIsInitialized() const { return m_isInitialized.load(); }
 
 private:
     std::vector<std::unique_ptr<Process>> m_processes;  // Stores all processes managed by the kernel
