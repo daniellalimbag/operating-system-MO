@@ -59,6 +59,7 @@ public:
     void handleMemoryAccess(Process& process, size_t virtualAddress);
     uint16_t readMemory(Process& process, size_t virtualAddress);
     void writeMemory(Process& process, size_t virtualAddress, uint16_t data);
+    void dumpBackingStoreToFile(const std::string& filename) const;
 
 private:
     std::vector<std::unique_ptr<Process>> m_processes;  // Stores all processes managed by the kernel

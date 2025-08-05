@@ -421,6 +421,47 @@ void Kernel::printMemoryStatistics() const {
     std::cout << "Pages swapped Out: " << m_numPagedOut << "\n";
 }
 
+void Kernel::dumpBackingStoreToFile(const std::string& filename) const {
+    std::lock_guard<std::mutex> lock(m_kernelMutex);
+
+    if (m_physicalMemory.empty() || m_frameStatus.empty() || m_memPerFrame == 0) {
+        std::cerr << "Kernel: Memory not initialized. Skipping backing store dump.\n";
+        return;
+    }
+
+    std::ofstream outFile(filename);
+    if (!outFile.is_open()) {
+        std::cerr << "Kernel: Failed to open " << filename << " for writing.\n";
+        return;
+    }
+
+    outFile << "=== Backing Store Dump ===\n";
+    outFile << "Frame Size: " << m_memPerFrame << " bytes (" << m_memPerFrame / 2 << " words per frame)\n\n";
+
+    for (size_t frameIndex = 0; frameIndex < m_totalFrames; ++frameIndex) {
+        if (!m_frameStatus[frameIndex]) {
+            outFile << "Frame " << frameIndex << " (Occupied):\n";
+
+            size_t baseAddress = frameIndex * (m_memPerFrame / 2); // offset in uint16_t space
+            for (size_t i = 0; i < (m_memPerFrame / 2); ++i) {
+                size_t physAddr = baseAddress + i;
+                if (physAddr < m_physicalMemory.size()) {
+                    outFile << "  [" << physAddr << "] = " << m_physicalMemory[physAddr] << "\n";
+                } else {
+                    outFile << "  [" << physAddr << "] = <INVALID ADDRESS>\n";
+                }
+            }
+            outFile << "\n";
+        } else {
+            outFile << "Frame " << frameIndex << " (Free)\n\n";
+        }
+    }
+
+    outFile.close();
+    print("Kernel: Backing store dumped to " + filename + "\n");
+}
+
+
 // ===================================================
 // I/O APIs
 // ===================================================
@@ -520,11 +561,17 @@ bool Kernel::executeAllCores() {
                 core.currentProcess = nullptr;
                 core.isBusy = false;
                 core.currentQuantumTicks = 0U;
+                bool didPageOut = false;
                 for (const auto& pair : p->getPageTable()) {
                     m_frameStatus[pair.second] = true;
                     m_numPagedOut++;
+                    didPageOut = true;
                 }
                 p->getPageTable().clear();
+                
+                if (didPageOut) {
+                    dumpBackingStoreToFile("csopesy-backing-store.txt");
+                }
             } else if (m_schedulerType == SchedulerType::ROUND_ROBIN && core.currentQuantumTicks >= m_quantumCycles) {
                 p->setState(ProcessState::READY);
                 m_readyQueue.push(p);
