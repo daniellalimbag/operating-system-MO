@@ -23,7 +23,7 @@ void Process::setState(ProcessState newState) {
 bool Process::isFinished() const {
     // A process is finished if its main program counter is at or beyond the end
     // AND its loop stack is empty (no pending FOR loops).
-    return (m_programCounter >= m_instructions.size() && m_loopStack.empty());
+    return (m_programCounter >= m_instructions.size());
 }
 
 void Process::setSleepTicks(uint8_t ticks) {
@@ -46,60 +46,18 @@ void Process::executeNextInstruction(uint32_t coreId) {
     std::cout << "Process " << getPid() << " executing. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << " " << m_programCounter << "/" << m_instructions.size() << "\n";
     */
 
-    if (!m_loopStack.empty()) {
-        LoopContext& currentLoop = m_loopStack.back();
-        const ForInstruction* forInstr = currentLoop.forInstructionPtr;
+    if (m_programCounter < m_instructions.size()) {
+        const std::unique_ptr<IProcessInstruction>& current_instruction = m_instructions[m_programCounter];
 
-        if (currentLoop.currentInstructionIndexInBody < forInstr->getBody().size()) { // If in a loop
-            const std::unique_ptr<IProcessInstruction>& current_instruction_in_loop =
-                forInstr->getBody()[currentLoop.currentInstructionIndexInBody];
+        /*
+        std::cout << m_processName << ": Executing instruction type: " << static_cast<int>(current_instruction->getType()) << " Line: " << static_cast<int>(m_programCounter) << "\n";
+        */
 
-            current_instruction_in_loop->execute(*this);
-
-            currentLoop.currentInstructionIndexInBody++;
-
-            if (currentLoop.currentInstructionIndexInBody >= forInstr->getBody().size()) {
-                currentLoop.currentIteration++;
-
-                if (currentLoop.currentIteration < currentLoop.totalRepeats) {
-                    currentLoop.currentInstructionIndexInBody = 0;
-                } else {
-                    m_loopStack.pop_back();
-                    if (m_loopStack.empty()) {
-                        m_programCounter++; // Increment main PC ONLY when the outermost FOR loop completes
-                    }
-                }
-            }
-        } else {    // never reaches this branch
-            std::cerr << "[Process " << m_pid << "] Warning: Loop body instructions exhausted unexpectedly. Popping loop context.\n";
-            m_loopStack.pop_back();
-            m_programCounter++;
-        }
-    } else {
-        if (m_programCounter < m_instructions.size()) {
-            const std::unique_ptr<IProcessInstruction>& current_instruction = m_instructions[m_programCounter];
-
-            /*
-            std::cout << m_processName << ": Executing instruction type: " << static_cast<int>(current_instruction->getType()) << " Line: " << static_cast<int>(m_programCounter) << "\n";
-            */
-
-            if (current_instruction->getType() == InstructionType::FOR) {
-                current_instruction->execute(*this);
-                const ForInstruction* forInstr = static_cast<const ForInstruction*>(current_instruction.get());
-                bool loopStarted = (!m_loopStack.empty() && m_loopStack.back().forInstructionPtr == forInstr);
-
-                if (!loopStarted) {
-                     m_programCounter++;
-                }
-            } else {
-                current_instruction->execute(*this);
-                m_programCounter++;
-            }
-
-        }
+        current_instruction->execute(*this);
+        m_programCounter++;
     }
 
-    if (m_programCounter >= m_instructions.size() && m_loopStack.empty()) {
+    if (m_programCounter >= m_instructions.size()) {
         m_sleepTicksRemaining = 0;
     }
 }
@@ -138,13 +96,4 @@ void Process::setVariableValue(const std::string& var, uint16_t value) {
 
 void Process::addToLog(const std::string& message) {
     m_logBuffer.push_back(message);
-}
-
-void Process::pushLoopContext(const ForInstruction* forInstr) {
-    if (m_loopStack.size() >= 3) { // Max nesting level of 3
-        addToLog("[Process " + std::to_string(m_pid) + "] Warning: Max loop nesting depth reached. Skipping FOR instruction.\n");
-        m_programCounter++;
-        return;
-    }
-    m_loopStack.emplace_back(forInstr->getRepeatCount(), forInstr);
 }

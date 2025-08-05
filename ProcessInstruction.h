@@ -16,8 +16,7 @@ enum class InstructionType {
     PRINT,
     DECLARE,
     SUBTRACT,
-    SLEEP,
-    FOR
+    SLEEP
 };
 
 /**
@@ -28,20 +27,7 @@ enum class InstructionType {
 class IProcessInstruction {
 public:
     virtual ~IProcessInstruction() = default;
-
-    /**
-     * @brief Executes the instruction on the given process.
-     * @param process The Process instance on which the instruction should operate.
-     * @note If instructions also need direct Kernel services (e.g., for direct console print
-     * or very specific syscalls), you might add a `Kernel& kernel` parameter here.
-     * For now, it's kept concise as `Process` can relay to `Kernel` if needed.
-     */
     virtual void execute(Process& process) = 0;
-
-    /**
-     * @brief Returns the type of the instruction.
-     * @return An InstructionType enum value.
-     */
     virtual InstructionType getType() const = 0;
 };
 
@@ -90,26 +76,6 @@ public:
 };
 
 /**
- * @class ForInstruction
- * @brief Represents a FOR loop instruction. Contains its own body of instructions and repeat count.
- * @details The execution logic for looping is managed by the Process class's `executeNextInstruction`
- * using the `LoopContext` and `m_loopStack`. This instruction primarily sets up that context.
- */
-class ForInstruction : public IProcessInstruction {
-    std::vector<std::unique_ptr<IProcessInstruction>> instructions_body; // The instructions within the loop body
-    int repeats; // Number of times the loop body should repeat
-public:
-    ForInstruction(std::vector<std::unique_ptr<IProcessInstruction>> instrs, int reps)
-        : instructions_body(std::move(instrs)), repeats(reps) {}
-    void execute(Process& process) override; // Sets up the loop context in Process
-
-    // Getters for Process to access loop details
-    const std::vector<std::unique_ptr<IProcessInstruction>>& getBody() const { return instructions_body; }
-    int getRepeatCount() const { return repeats; }
-    InstructionType getType() const override { return InstructionType::FOR; }
-};
-
-/**
  * @class PrintInstruction
  * @brief Represents a PRINT instruction, displaying a message to the process's log.
  */
@@ -119,7 +85,6 @@ public:
     PrintInstruction(const std::string& msg) : message(msg) {}
     void execute(Process& process) override;
     InstructionType getType() const override { return InstructionType::PRINT; }
-    const std::string& getMessage() const { return message; }
 };
 
 /**

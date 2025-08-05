@@ -23,25 +23,6 @@ enum class ProcessState {
 };
 
 /**
- * @struct LoopContext
- * @brief Holds the contextual information for an active FOR loop within a process.
- */
-struct LoopContext {
-    size_t currentInstructionIndexInBody; // Current index within the loop's own instruction vector (ForInstruction::getBody())
-    int currentIteration;              // The current iteration (0 to repeats-1)
-    int totalRepeats;                     // Total number of repetitions for this loop
-    const ForInstruction* forInstructionPtr; // Pointer to the actual ForInstruction object to access its body
-
-    /**
-     * @brief Constructor for LoopContext.
-     * @param repeats The total number of repetitions for this loop.
-     * @param forInstr A pointer to the ForInstruction object that initiated this loop.
-     */
-    LoopContext(int repeats, const ForInstruction* forInstr)
-        : currentInstructionIndexInBody(0UL), currentIteration(0), totalRepeats(repeats), forInstructionPtr(forInstr) {}
-};
-
-/**
  * @class Process
  * @brief Represents a single process in the Simple OS.
  * @details This initial version focuses on identity, state, control flow, and lifecycle.
@@ -75,8 +56,6 @@ public: // Public interface for Kernel interaction
     uint16_t clampUint16(int value);
     void addToLog(const std::string& message);
     const std::vector<std::string>& getLogBuffer() const { return m_logBuffer; }
-    void pushLoopContext(const ForInstruction* forInstr);
-    const std::vector<LoopContext>& getLoopStack() const { return m_loopStack; }
 
     // =====================================================================
     // Specialized helper objects (e.g., SymbolTable, ProcessLogger)
@@ -104,7 +83,6 @@ private:
     // Process-specific data
     std::map<std::string, uint16_t> m_variables; // For process's local variables
     std::vector<std::string> m_logBuffer;       // For process's screen output (PRINT statements)
-    std::vector<LoopContext> m_loopStack;       // For FOR loop management
 
     // Current execution context
     int m_currentExecutionCoreId;

@@ -32,18 +32,7 @@ Kernel::Kernel()
       m_numPagedIn(0ULL),
       m_numPagedOut(0ULL),
       m_runningGeneration(false),
-      m_shutdownRequested(false),
-      m_numCpus(4U),
-      m_schedulerType(SchedulerType::ROUND_ROBIN),
-      m_quantumCycles(5U),
-      m_batchProcessFreq(1U),
-      m_minInstructions(1000U),
-      m_maxInstructions(2000U),
-      m_delaysPerExec(0U),
-      m_maxOverallMem(128U),
-      m_memPerFrame(64U),
-      m_minMemPerProc(64U),
-      m_maxMemPerProc(64U) {}
+      m_shutdownRequested(false) {}
 
 // ===================================================
 // Core OS Lifecycle Methods
@@ -518,23 +507,20 @@ bool Kernel::checkIfBusy() {
 }
 
 Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memRequired){
-    // No need for mutex because it's only called within run() and startProcess()
-    // Use a random number generator
     // static ensures the generator is initialized only once per program run
     static std::random_device rd;
     static std::mt19937 gen(rd());
+    SystemConfig defaultConfig;
 
     // Determine random number of instructions within the specified range
-    // Ensure m_minInstructions and m_maxInstructions are initialized (e.g., in Kernel constructor or initialize method)
     if (m_minInstructions == 0 || m_maxInstructions == 0 || m_minInstructions > m_maxInstructions) {
         std::cerr << "[Kernel] Warning: Invalid instruction range (" << m_minInstructions
-                  << "-" << m_maxInstructions << "). Using default range [10, 50].\n";
-        m_minInstructions = 1000U; // Fallback to default
-        m_maxInstructions = 2000U;
+                  << "-" << m_maxInstructions << "). Using default range [1000, 2000].\n";
+        m_minInstructions = defaultConfig.minInstructions;
+        m_maxInstructions = defaultConfig.maxInstructions;
     }
     std::uniform_int_distribution<uint32_t> distrib_num_instructions(m_minInstructions, m_maxInstructions);
     uint32_t numInstructions = distrib_num_instructions(gen);
-
     std::vector<std::unique_ptr<IProcessInstruction>> instructions;
     instructions.reserve(numInstructions);
 
@@ -546,18 +532,25 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memR
     std::uniform_int_distribution<uint8_t> distrib_sleep_ticks(1, 255);
     // A distribution for loop repeats (e.g., 1 to 3 repeats)
     std::uniform_int_distribution<int> distrib_loop_repeats(1, 3);
+
     // A distribution for memory required (e.g., 64 to 65,536 for uint32_t)
     if (memRequired == 0U) {
+        if (m_minMemPerProc > m_maxMemPerProc) {
+            std::cerr << "[Kernel] Warning: Invalid memory range (" << m_minMemPerProc
+                  << "-" << m_maxMemPerProc << "). Using default range [64, 128].\n";
+            m_minMemPerProc = defaultConfig.minMemPerProc;
+            m_maxMemPerProc = defaultConfig.maxMemPerProc;
+        }
         std::uniform_int_distribution<uint32_t> distrib_mem_required(m_minMemPerProc, m_maxMemPerProc);
         memRequired = distrib_mem_required(gen);
     }
 
     // Define the types of instructions we can generate
     enum class DummyInstructionType {
-        ADD, SUBTRACT, SLEEP, FOR, PRINT, DECLARE
+        ADD, PRINT, DECLARE, SUBTRACT, SLEEP
     };
-    // A distribution for instruction types (e.g., ADD to DECLARE)
-    std::uniform_int_distribution<> distrib_instr_type(static_cast<int>(DummyInstructionType::ADD), static_cast<int>(DummyInstructionType::DECLARE));
+    // A distribution for instruction types (e.g., ADD to SLEEP)
+    std::uniform_int_distribution<> distrib_instr_type(static_cast<int>(DummyInstructionType::ADD), static_cast<int>(DummyInstructionType::SLEEP));
 
     for (size_t i = 0; i < numInstructions; ++i) {
         DummyInstructionType instrType = static_cast<DummyInstructionType>(distrib_instr_type(gen));
@@ -576,13 +569,20 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memR
             }
         };
 
-        // Avoid too many nested loops immediately, or loops that are too long in small processes
-        bool canCreateForLoop = (instructions.size() < numInstructions / 2) && (numInstructions - instructions.size() > 5);
-
         switch (instrType) {
             case DummyInstructionType::ADD:
                 instructions.push_back(std::make_unique<AddInstruction>(
                     getRandomVarName(), getRandomOperand(), getRandomOperand()
+                ));
+                break;
+            case DummyInstructionType::PRINT: {
+                std::string msg = "Hello world from " + newPname + "!";
+                instructions.push_back(std::make_unique<PrintInstruction>(msg));
+                break;
+            }
+            case DummyInstructionType::DECLARE:
+                instructions.push_back(std::make_unique<DeclareInstruction>(
+                    getRandomVarName(), distrib_value(gen)
                 ));
                 break;
             case DummyInstructionType::SUBTRACT:
@@ -593,36 +593,6 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memR
             case DummyInstructionType::SLEEP:
                 instructions.push_back(std::make_unique<SleepInstruction>(
                     distrib_sleep_ticks(gen)
-                ));
-                break;
-            case DummyInstructionType::FOR:
-                // Only create FOR loops if there's enough room for a body and it won't exceed nesting limit
-                if (canCreateForLoop) {
-                    // Create a small, simple loop body
-                    std::vector<std::unique_ptr<IProcessInstruction>> loopBody;
-                    int bodySize = std::uniform_int_distribution<>(1, 3)(gen); // 1 to 3 instructions in body
-                    for (int j = 0; j < bodySize; ++j) {
-                        // For simplicity, mostly print or declare within loops
-                        if (std::uniform_int_distribution<>(0, 1)(gen) == 0) {
-                            loopBody.push_back(std::make_unique<PrintInstruction>("Hello world from " + newPname + "!"));
-                        } else {
-                            loopBody.push_back(std::make_unique<DeclareInstruction>(getRandomVarName(), distrib_value(gen)));
-                        }
-                    }
-                    instructions.push_back(std::make_unique<ForInstruction>(
-                        std::move(loopBody), distrib_loop_repeats(gen)
-                    ));
-                    break;
-                }
-                // If we can't create a FOR loop, fall through the PRINT case instead.
-            case DummyInstructionType::PRINT: {
-                std::string msg = "Hello world from " + newPname + "!";
-                instructions.push_back(std::make_unique<PrintInstruction>(msg));
-                break;
-            }
-            case DummyInstructionType::DECLARE:
-                instructions.push_back(std::make_unique<DeclareInstruction>(
-                    getRandomVarName(), distrib_value(gen)
                 ));
                 break;
         }
@@ -638,12 +608,6 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memR
 
     // Add the unique_ptr to the kernel's process list, transferring ownership
     m_processes.push_back(std::move(newProcess));
-
-    /*
-    std::cout << "[Kernel] Generated dummy process with PID: " << newPid
-              << ". Instructions: " << numInstructions
-              << ". Total processes: " << m_processes.size() << "\n";
-    */
 
     rawProcessPtr->setState(ProcessState::READY);
     m_readyQueue.push(rawProcessPtr);

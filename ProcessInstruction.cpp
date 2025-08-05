@@ -28,23 +28,6 @@ void SleepInstruction::execute(Process& process) {
     process.setSleepTicks(ticks);
 }
 
-// --- ForInstruction Implementation ---
-// This method now only pushes the loop context onto the process's stack.
-// The actual iteration and execution of the loop body is handled by Process::executeNextInstruction.
-void ForInstruction::execute(Process& process) {
-    // Check if exceeding nesting limit (optional, but good for robustness)
-    if (process.getLoopStack().size() >= 3) { // Max nesting level is 3
-        process.addToLog("Warning: Exceeded FOR loop nesting limit (3). Skipping inner loop.");
-        // Process will simply advance its main program counter past this ForInstruction
-        // in executeNextInstruction after this call returns.
-        return;
-    }
-
-    // Push new loop context onto the process's stack
-    // Pass 'this' (a pointer to this ForInstruction object) so Process can access getBody() later.
-    process.pushLoopContext(this);
-}
-
 // --- PrintInstruction Implementation ---
 void PrintInstruction::execute(Process& process) {
     std::string output = message;
