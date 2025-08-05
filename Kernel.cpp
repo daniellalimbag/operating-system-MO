@@ -10,6 +10,7 @@
 #include <random>
 #include <limits>
 #include <cmath>
+#include <iomanip>
 
 // ===================================================
 // Anonymous helper namespace
@@ -586,6 +587,21 @@ void Kernel::displayProcess(Process* process) const {
     std::cout << "Current instruction line: " << process->getCurrentInstructionLine() << "\n";
     std::cout << "Lines of code: " << process->getTotalInstructionLines() << "\n";
     std::cout << "Memory Required: " << process->getMemoryRequired() << "\n";
+    /*
+    std::cout << "\nDeclared Variables:\n";
+    auto variables = process->getVariableAddresses();
+    if (variables.empty()) {
+        std::cout << "No variables declared.\n";
+    } else {
+        std::cout << std::left << std::setw(15) << "Variable" << std::setw(20) << "Virtual Address" << "Value\n";
+        std::cout << "-------------------------------------------\n";
+        for (const auto& var : variables) {
+            uint16_t value = readMemory(*process, var.second);
+            std::cout << std::left << std::setw(15) << var.first
+                      << std::setw(20) << var.second << "\n";
+        }
+    }
+    */
 }
 
 ssize_t Kernel::findFreeFrame() const {

@@ -49,6 +49,7 @@ public: // Public interface for Kernel interaction
     size_t getTotalInstructionLines() const { return m_instructions.size(); }
     uint32_t getCurrentExecutionCoreId() const { return m_currentExecutionCoreId; }
     uint32_t getMemoryRequired() const { return m_memoryRequired; }
+    std::map<std::string, size_t> getVariableAddresses() const { return m_variableAddresses; }
 
     std::map<size_t, size_t>& getPageTable() { return m_pageTable; }
 
