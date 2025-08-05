@@ -17,8 +17,8 @@ struct SystemConfig {
     SchedulerType scheduler = SchedulerType::ROUND_ROBIN;   // Default to Round Robin
     uint32_t quantumCycles = 5U;                            // Default quantum
     uint32_t batchProcessFreq = 1U;                         // Default batch process frequency
-    uint32_t minInstructions = 1000U;                       // Default min instructions per process
-    uint32_t maxInstructions = 2000U;                       // Default max instructions per process
+    uint32_t minInstructions = 10U;                       // Default min instructions per process
+    uint32_t maxInstructions = 20U;                       // Default max instructions per process
     uint32_t delaysPerExec = 0U;                            // Default delay per instruction execution
     uint32_t maxOverallMem = 256U;                          // Default max overall memory (e.g., 256B)
     uint32_t memPerFrame = 128U;                            // Default memory per frame (e.g., 128B)
