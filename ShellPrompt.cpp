@@ -1,8 +1,8 @@
 #include "ShellPrompt.h"
 #include "Kernel.h"
 #include "SystemConfigReader.h"
+#include "Process.h"
 
-#include <vector>
 #include <sstream>
 #include <cstdint>
 
@@ -60,6 +60,7 @@ void ShellPrompt::showHeader(const std::string& instructions) const {
     kernel.print("\n");
     kernel.print(instructions);
     kernel.print("\n");
+    kernel.printHorizontalLine();
 }
 
 bool ShellPrompt::runInitialBootPrompt(const std::string& prompt) {
@@ -84,12 +85,10 @@ void ShellPrompt::initializeKernel() {
     bool configLoaded = readConfigFromFile("config.txt", loadedConfig, kernel);
     if (configLoaded) {
         kernel.print("Configuration loaded successfully. Sending to kernel...\n");
-        kernel.initialize(loadedConfig);
     } else {
         kernel.print("Configuration loading failed or had errors. Using default values for unconfigured/invalid parameters.\n");
     }
-
-    kernel.print("Main shell active. Type 'help' for available commands, or 'exit' to quit.\n");
+    kernel.initialize(loadedConfig);
 }
 
 void ShellPrompt::runMainShellLoop(const std::string& prompt) {
@@ -104,7 +103,7 @@ void ShellPrompt::runMainShellLoop(const std::string& prompt) {
     }
 }
 
-ParsedCommand ShellPrompt::parseCommand(const std::string& command) {
+ParsedCommand ShellPrompt::parseCommand(const std::string& command) const {
     ParsedCommand parsed;
     std::istringstream iss(command);
 
@@ -131,7 +130,8 @@ bool ShellPrompt::executeCommand(const ParsedCommand& parsed) {
 }
 
 void ShellPrompt::showHelp() const {
-    kernel.print("\n--- Available Commands ---\n");
+    kernel.printHorizontalLine();
+    kernel.print("Available Commands\n");
     kernel.print("exit                                              - Quits the main OS shell.\n");
     kernel.print("help                                              - Displays this help message.\n");
     kernel.print("echo                                              - Echoes the command back.\n");
@@ -143,7 +143,7 @@ void ShellPrompt::showHelp() const {
     kernel.print("screen -s <process_memory_size> <process_name>    - Start a new process\n");
     kernel.print("process-smi                                       - Print a summarized view of the memory allocation and CPU utilization\n");
     kernel.print("vmstat                                            - Print a detailed view of the memory allocation\n");
-    kernel.print("--------------------------\n\n");
+    kernel.printHorizontalLine();
 }
 
 void ShellPrompt::setupCommands() {
@@ -251,7 +251,7 @@ void ShellPrompt::setupCommands() {
     };
 }
 
-void ShellPrompt::handleScreenReattach(const std::vector<std::string>& args) {
+void ShellPrompt::handleScreenReattach(const std::vector<std::string>& args) const {
     std::string process_name = args[1];
     Process* processFound = kernel.reattachToProcess(process_name);
     if (processFound) {
@@ -289,7 +289,7 @@ void ShellPrompt::handleScreenStart(const std::vector<std::string>& args) {
     }
 }
 
-void ShellPrompt::handleScreenMenu(Process* process) {
+void ShellPrompt::handleScreenMenu(Process* process) const {
     std::string screen_command;
     const std::string screen_prompt_str = process->getPname() + ":\\>";
 

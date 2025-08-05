@@ -28,11 +28,11 @@ private:
     bool runInitialBootPrompt(const std::string& prompt);
     void initializeKernel();
     void runMainShellLoop(const std::string& prompt);
-    ParsedCommand parseCommand(const std::string& command);
+    ParsedCommand parseCommand(const std::string& command) const;
     bool executeCommand(const ParsedCommand& parsed);
     void showHelp() const;
     void setupCommands();
-    void handleScreenReattach(const std::vector<std::string>& args);
+    void handleScreenReattach(const std::vector<std::string>& args) const;
     void handleScreenStart(const std::vector<std::string>& args);
-    void handleScreenMenu(Process* process);
+    void handleScreenMenu(Process* process) const;
 };

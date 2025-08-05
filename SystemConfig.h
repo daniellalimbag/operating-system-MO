@@ -6,7 +6,6 @@
 enum class SchedulerType {
     ROUND_ROBIN, // "rr"
     FCFS         // "fcfs"
-    // Add other types as needed
 };
 
 /**
@@ -21,8 +20,8 @@ struct SystemConfig {
     uint32_t minInstructions = 1000U;                       // Default min instructions per process
     uint32_t maxInstructions = 2000U;                       // Default max instructions per process
     uint32_t delaysPerExec = 0U;                            // Default delay per instruction execution
-    uint32_t maxOverallMem = 256U;                           // Default max overall memory (e.g., 256B)
-    uint32_t memPerFrame = 128U;                             // Default memory per frame (e.g., 128B)
-    uint32_t minMemPerProc = 64U;                          // Default min memory per process (e.g., 64B)
+    uint32_t maxOverallMem = 256U;                          // Default max overall memory (e.g., 256B)
+    uint32_t memPerFrame = 128U;                            // Default memory per frame (e.g., 128B)
+    uint32_t minMemPerProc = 64U;                           // Default min memory per process (e.g., 64B)
     uint32_t maxMemPerProc = 128U;                          // Default max memory per process (e.g., 128B)
 };
