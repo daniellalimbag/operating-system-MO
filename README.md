@@ -2,15 +2,30 @@
 
 ## Overview
 
-This is the first group machine project in CSOPESY: Process Multiplexer and CLI. It simulates a multi-core CPU scheduler and process management system, inspired by Linux's `screen` command and typical shell environments. The system supports process creation, scheduling, and execution of basic instructions, with logging and reporting features.
+This is the second group machine project in CSOPESY: The Multiprocessor Simulator is a simulated multi-core operating system written in C++. It emulates core OS features including memory management, process scheduling, demand paging, and a shell-style CLI. This version builds upon the MO1 foundation by introducing memory access emulation, paging, memory visualization tools, and user-defined instruction scripting.
+
+Inspired by tools like nvidia-smi, vmstat, and screen, this project aims to mimic fundamental OS operations
 
 ## Features
-- Multi-core CPU scheduler (supports FCFS and Round Robin)
-- Processes are managed and scheduled across multiple simulated CPU cores
-- Process creation and management via CLI commands
-- Per-process instruction execution (PRINT, DECLARE, ADD, SUBTRACT, SLEEP, FOR)
-- Real-time process status and CPU utilization reporting
+- Multi-core CPU scheduling: Supports FCFS and Round Robin schedulers with simulated process multiplexing.
+- Demand Paging Memory Manager: Implements page fault handling and page replacement for limited physical memory.
+- Virtual Memory Access: Processes can simulate READ and WRITE operations to memory addresses.
+- Process Shell Interface: Shell-style command system (e.g., screen -s, screen -c, screen -r, scheduler-start) for creating and managing processes.
+- Memory Visualization: Tools like process-smi and vmstat provide real-time memory usage and page statistics.
+- Backing Store: Uses csopesy-backing-store.txt to store swapped-out pages during memory overflows.
+- Process Variables: Each process has a symbol table for variables with strict size limits (max 32 variables, 64 bytes).
+- Access Violations: Invalid memory accesses trigger process shutdowns with timestamped error messages.
 - Configurable system parameters via `config.txt`
+
+## Main Menu Commands
+Command	   Description
+`process-smi`	Shows high-level memory usage and process allocations.
+`vmstat`	Displays detailed active/inactive process and memory stats.
+`screen -s <name> <size>`	Creates a process with the given name and memory size.
+`screen -c <name> <size> "<instructions>"`	Creates a process with a script of up to 50 instructions.
+`screen -r <name>`	Attaches to a running process screen.
+`scheduler-start`	Starts scheduling all processes using current policy.
+
 
 ## How to Build
 
