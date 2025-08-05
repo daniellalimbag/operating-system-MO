@@ -217,6 +217,14 @@ void ShellPrompt::setupCommands() {
         kernel.printMemoryStatistics();
         return true;
     };
+    commandHandlers["report-util"] = [this](const std::vector<std::string>& args) -> bool {
+        if (!args.empty()) {
+            kernel.print("Usage: report-util\n");
+            return true;
+        }
+        kernel.exportListStatusToFile("csopesy-log.txt");
+        return true;
+    };
     commandHandlers["screen"] = [this](const std::vector<std::string>& args) -> bool {
         if (args.empty()) {
             kernel.print("Usage: screen <subcommand> [args...]\n");

@@ -11,6 +11,7 @@
 #include <limits>
 #include <cmath>
 #include <iomanip>
+#include <fstream>
 
 // ===================================================
 // Anonymous helper namespace
@@ -235,6 +236,83 @@ void Kernel::listStatus() const {
         print("\n");
     }
     printHorizontalLine();
+}
+
+void Kernel::exportListStatusToFile(const std::string& filename) const {
+    std::lock_guard<std::mutex> lock(m_kernelMutex);
+    std::ofstream outFile(filename);
+    if (!outFile.is_open()) {
+        std::cerr << "Kernel: Failed to open " << filename << " for writing.\n";
+        return;
+    }
+
+    uint32_t coresBusy = 0;
+    for (const auto& core : m_cpuCores) {
+        if (core.isBusy) {
+            ++coresBusy;
+        }
+    }
+
+    outFile << "\n";
+    outFile << "CPU Utilization: " << (static_cast<float>(coresBusy) / static_cast<float>(m_numCpus)) * 100.0f << "%\n";
+    outFile << "Cores used: " << coresBusy << "\n";
+    outFile << "Cores available: " << (m_numCpus - coresBusy) << "\n";
+    outFile << "----------------------------------------\n";
+
+    if (m_processes.empty()) {
+        outFile << "No processes found.\n";
+        outFile << "----------------------------------------\n";
+        return;
+    }
+
+    outFile << "Active Processes:\n";
+    for (const auto& p_ptr : m_processes) {
+        if (p_ptr->getState() == ProcessState::TERMINATED) continue;
+
+        outFile << "  " << p_ptr->getPname() << " (PID " << p_ptr->getPid() << ")"
+                << " (" << p_ptr->getCreationTime().time_since_epoch().count() << ")"
+                << " State: ";
+        switch (p_ptr->getState()) {
+            case ProcessState::NEW: outFile << "NEW"; break;
+            case ProcessState::READY: outFile << "READY"; break;
+            case ProcessState::RUNNING: outFile << "RUNNING"; break;
+            case ProcessState::WAITING: outFile << "WAITING"; break;
+            case ProcessState::TERMINATED: outFile << "TERMINATED"; break;
+            default: outFile << "UNKNOWN"; break;
+        }
+        outFile << " Inst: " << p_ptr->getCurrentInstructionLine() << "/" << p_ptr->getTotalInstructionLines();
+        if (p_ptr->getSleepTicksRemaining() > 0) {
+            outFile << " (Sleeping " << static_cast<int>(p_ptr->getSleepTicksRemaining()) << " ticks)";
+        }
+        if (p_ptr->getState() == ProcessState::RUNNING) {
+            for (const auto& core : m_cpuCores) {
+                if (core.isBusy && core.currentProcess && p_ptr->getPid() == core.currentProcess->getPid()) {
+                    outFile << " (Core: " << core.id << ")";
+                    break;
+                }
+            }
+        }
+        outFile << "\n";
+    }
+    outFile << "\n";
+
+    outFile << "Terminated Processes:\n";
+    for (const auto& p_ptr : m_processes) {
+        if (p_ptr->getState() != ProcessState::TERMINATED) continue;
+
+        outFile << "  " << p_ptr->getPname() << " (PID " << p_ptr->getPid() << ")"
+                << " (" << p_ptr->getCreationTime().time_since_epoch().count() << ")"
+                << " State: TERMINATED"
+                << " Inst: " << p_ptr->getCurrentInstructionLine() << "/" << p_ptr->getTotalInstructionLines();
+        if (p_ptr->getSleepTicksRemaining() > 0) {
+            outFile << " (Sleeping " << static_cast<int>(p_ptr->getSleepTicksRemaining()) << " ticks)";
+        }
+        outFile << "\n";
+    }
+    outFile << "----------------------------------------\n";
+
+    outFile.close();
+    print("Kernel: Process utilization report saved to " + filename + "\n");
 }
 
 Process* Kernel::reattachToProcess(const std::string& processName) const {
@@ -497,7 +575,7 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memR
 
     const std::vector<std::string> varNames = {"a", "b", "c", "x", "y", "counter", "temp"};
     std::uniform_int_distribution<uint16_t> distrib_value(std::numeric_limits<uint16_t>::min(), std::numeric_limits<uint16_t>::max());
-    std::uniform_int_distribution<uint8_t> distrib_sleep_ticks(1, 255);
+    std::uniform_int_distribution<unsigned int> distrib_sleep_ticks(1, 255);
     std::uniform_int_distribution<int> distrib_loop_repeats(1, 3);
 
     if (memRequired == 0U) {

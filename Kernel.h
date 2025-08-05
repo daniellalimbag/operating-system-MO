@@ -1,3 +1,8 @@
+#ifdef _WIN32
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 #pragma once
 
 #include <string>
@@ -7,7 +12,7 @@
 #include <atomic>
 #include <cstdint>
 #include <queue>
-
+#include <condition_variable>
 #include "SystemConfig.h"
 #include "Process.h"
 
@@ -41,6 +46,7 @@ public:
     void printSmi(Process* process) const;                                          // process-smi inside screen
     void printMemoryUtilizationReport() const;                                      // process-smi
     void printMemoryStatistics() const;                                             // vmstat
+    void exportListStatusToFile(const std::string& filename) const;                 // report-util
 
     // I/O APIs
     void print(const std::string& message) const;
