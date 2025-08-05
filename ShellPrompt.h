@@ -34,5 +34,6 @@ private:
     void setupCommands();
     void handleScreenReattach(const std::vector<std::string>& args) const;
     void handleScreenStart(const std::vector<std::string>& args);
+    void handleScreenCreate(const std::vector<std::string>& args);
     void handleScreenMenu(Process* process) const;
 };

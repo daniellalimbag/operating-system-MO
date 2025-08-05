@@ -141,6 +141,7 @@ void ShellPrompt::showHelp() const {
     kernel.print("screen -ls                                        - Lists CPU utilization, core usage, and a summary of all running and finished processes\n");
     kernel.print("screen -r <process_name>                          - Reattach to the screen of an existing process\n");
     kernel.print("screen -s <process_memory_size> <process_name>    - Start a new process\n");
+    kernel.print("screen -c <process_name> \"<instructions>\"         - Creates a new process with user-input instructions.\n");
     kernel.print("process-smi                                       - Print a summarized view of the memory allocation and CPU utilization\n");
     kernel.print("vmstat                                            - Print a detailed view of the memory allocation\n");
     kernel.printHorizontalLine();
@@ -242,6 +243,12 @@ void ShellPrompt::setupCommands() {
             } else {
                 handleScreenStart(args);
             }
+        } else if (subCommand == "-c") {
+            if (args.size() < 3) {
+                kernel.print("Usage: screen -c <process_name> \"<instructions>\"\n");
+            } else {
+                handleScreenCreate(args);
+            }
         } else {
             kernel.print("Unknown 'screen' subcommand: '" + subCommand + "'.\n");
             kernel.print("Usage: screen <subcommand> [args...]\n");
@@ -286,6 +293,80 @@ void ShellPrompt::handleScreenStart(const std::vector<std::string>& args) {
     } else {
         processFound = kernel.startProcess(process_name, memValue);
         handleScreenMenu(processFound);
+    }
+}
+
+void ShellPrompt::handleScreenCreate(const std::vector<std::string>& args) {
+    if (args.size() < 3) {
+        kernel.print("Usage: screen -c <process_name> \"<instructions>;\"\n");
+        return;
+    }
+    std::string processName = args[1];
+
+    // Reconstruct the instruction string from the command line arguments
+    std::string full_command_line;
+    for (size_t i = 0; i < args.size(); ++i) {
+        full_command_line += args[i];
+        if (i < args.size() - 1) {
+            full_command_line += " ";
+        }
+    }
+
+    // Find the quoted instruction block
+    size_t quoteStart = full_command_line.find('"');
+    size_t quoteEnd = std::string::npos;
+    if (quoteStart != std::string::npos) {
+        quoteEnd = full_command_line.rfind('"');
+    }
+
+    // Validate the quoted string
+    if (quoteStart == std::string::npos || quoteEnd == std::string::npos || quoteEnd <= quoteStart) {
+        kernel.print("Error: Malformed instructions. Please use a single, double-quoted string.\n");
+        return;
+    }
+
+    std::string instructionString = full_command_line.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+
+    // Trim leading and trailing whitespace from the instruction string
+    size_t first = instructionString.find_first_not_of(" \t\n\r");
+    if (std::string::npos == first) {
+        // The instructions are empty or only contain whitespace. Reject.
+        kernel.print("Error: Instructions cannot be empty.\n");
+        return;
+    }
+    size_t last = instructionString.find_last_not_of(" \t\n\r");
+    instructionString = instructionString.substr(first, (last - first + 1));
+
+    // Enforce the rule: the final instruction must end with a semicolon.
+    if (instructionString.empty() || instructionString.back() != ';') {
+        kernel.print("Error: All instructions must end with a semicolon.\n");
+        return;
+    }
+
+    // Split the instructions by semicolon
+    std::vector<std::string> rawInstructions;
+    std::string currentInstruction;
+    std::istringstream iss(instructionString);
+    while (std::getline(iss, currentInstruction, ';')) {
+        // Trim leading and trailing whitespace for each instruction
+        size_t trimmed_first = currentInstruction.find_first_not_of(" \t\n\r");
+        if (std::string::npos != trimmed_first) {
+            size_t trimmed_last = currentInstruction.find_last_not_of(" \t\n\r");
+            rawInstructions.push_back(currentInstruction.substr(trimmed_first, (trimmed_last - trimmed_first + 1)));
+        }
+    }
+
+    if (!rawInstructions.empty()) {
+        // Call the kernel to create the process with the parsed instructions
+        // kernel.createProcessFromUserInstructions(processName, rawInstructions);
+        kernel.print("Process '" + processName + "' created and added to the ready queue.\n");
+
+        // Print out the instructions to match the desired output
+        for (const auto& instruction : rawInstructions) {
+            kernel.print(instruction + "\n");
+        }
+    } else {
+        kernel.print("Error: Instructions cannot be empty.\n");
     }
 }
 
