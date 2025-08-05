@@ -38,6 +38,7 @@ public:
     void listStatus() const;                                                        // screen -ls
     Process* reattachToProcess(const std::string& processName) const;               // screen -r
     Process* startProcess(const std::string& processName, uint32_t memRequired);    // screen -s
+    Process* createUserDefinedProcess(const std::string& processName, const std::vector<std::string>& rawInstructions);    // screen -c
     void printSmi(Process* process) const;                                          // process-smi inside screen
     void printMemoryUtilizationReport() const;                                      // process-smi
     void printMemoryStatistics() const;                                             // vmstat
@@ -96,4 +97,5 @@ private:
     Process* generateDummyProcess(const std::string& newPname, uint32_t memRequired);
     void displayProcess(Process* process) const;
     ssize_t findFreeFrame() const;
+    std::unique_ptr<IProcessInstruction> parseInstruction(const std::string& line);
 };

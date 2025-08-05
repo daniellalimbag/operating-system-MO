@@ -11,7 +11,9 @@ enum class InstructionType {
     ADD,
     SUBTRACT,
     PRINT,
-    SLEEP
+    SLEEP,
+    READ,
+    WRITE
 };
 
 /**
@@ -77,4 +79,32 @@ public:
     SleepInstruction(uint8_t ticks) : m_ticksToSleep(ticks) {}
     void execute(Process& process, Kernel& kernel) override;
     InstructionType getType() const override { return InstructionType::SLEEP; }
+};
+
+class ReadInstruction : public IProcessInstruction {
+private:
+    std::string m_varName;
+    size_t m_address;
+
+public:
+    ReadInstruction(const std::string& varName, size_t address)
+        : m_varName(varName), m_address(address) {}
+
+    void execute(Process& process, Kernel& kernel) override;
+
+    InstructionType getType() const override { return InstructionType::READ; }
+};
+
+class WriteInstruction : public IProcessInstruction {
+private:
+    std::string m_varName;
+    size_t m_address;
+
+public:
+    WriteInstruction(size_t address, const std::string& varName)
+        : m_varName(varName), m_address(address) {}
+
+    void execute(Process& process, Kernel& kernel) override;
+
+    InstructionType getType() const override { return InstructionType::WRITE; }
 };

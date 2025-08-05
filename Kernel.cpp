@@ -275,6 +275,46 @@ Process* Kernel::startProcess(const std::string& processName, uint32_t memRequir
     return newProcess;
 }
 
+Process* Kernel::createUserDefinedProcess(const std::string& processName, const std::vector<std::string>& rawInstructions) {
+    Process* createdProcess;
+    {
+        std::unique_lock<std::mutex> lock(m_kernelMutex);
+
+        std::vector<std::unique_ptr<IProcessInstruction>> parsedInstructions;
+        for (const auto& line : rawInstructions) {
+            auto instr = parseInstruction(line);
+            if (instr) {
+                parsedInstructions.push_back(std::move(instr));
+            } else {
+                std::cerr << "Kernel: Failed to parse instruction '" << line << "'. Terminating process creation.\n";
+                return nullptr;
+            }
+        }
+
+        // Check if any instructions were parsed successfully
+        if (parsedInstructions.empty()) {
+            std::cerr << "Kernel: No valid instructions were parsed. Process not created.\n";
+            return nullptr;
+        }
+
+        uint32_t memRequired = m_maxMemPerProc;
+
+        uint32_t newPid = m_nextPid++;
+        std::unique_ptr<Process> newProcess = std::make_unique<Process>(newPid, processName, memRequired, std::move(parsedInstructions));
+        Process* rawProcessPtr = newProcess.get();
+        m_processes.push_back(std::move(newProcess));
+
+        rawProcessPtr->setState(ProcessState::READY);
+        m_readyQueue.push(rawProcessPtr);
+
+        clearScreen();
+        displayProcess(rawProcessPtr);
+        createdProcess = rawProcessPtr;
+    }
+    m_cv.notify_one();
+    return createdProcess;
+}
+
 void Kernel::printSmi(Process* process) const {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
     displayProcess(process);
@@ -439,6 +479,7 @@ bool Kernel::executeAllCores() {
                     core.isBusy = false;
                 }
             } else if (p->isFinished()) {
+                p->setState(ProcessState::TERMINATED);
                 core.currentProcess = nullptr;
                 core.isBusy = false;
                 core.currentQuantumTicks = 0U;
@@ -587,7 +628,7 @@ void Kernel::displayProcess(Process* process) const {
     std::cout << "Current instruction line: " << process->getCurrentInstructionLine() << "\n";
     std::cout << "Lines of code: " << process->getTotalInstructionLines() << "\n";
     std::cout << "Memory Required: " << process->getMemoryRequired() << "\n";
-    /*
+
     std::cout << "\nDeclared Variables:\n";
     auto variables = process->getVariableAddresses();
     if (variables.empty()) {
@@ -596,12 +637,12 @@ void Kernel::displayProcess(Process* process) const {
         std::cout << std::left << std::setw(15) << "Variable" << std::setw(20) << "Virtual Address" << "Value\n";
         std::cout << "-------------------------------------------\n";
         for (const auto& var : variables) {
-            uint16_t value = readMemory(*process, var.second);
+            //uint16_t value = readMemory(*process, var.second);
             std::cout << std::left << std::setw(15) << var.first
                       << std::setw(20) << var.second << "\n";
         }
     }
-    */
+
 }
 
 ssize_t Kernel::findFreeFrame() const {
@@ -697,4 +738,71 @@ void Kernel::writeMemory(Process& process, size_t virtualAddress, uint16_t data)
     }
 
     m_physicalMemory[physicalAddress] = data;
+}
+
+std::unique_ptr<IProcessInstruction> Kernel::parseInstruction(const std::string& line) {
+    std::istringstream iss(line);
+    std::string instructionType;
+    iss >> instructionType;
+
+    std::transform(instructionType.begin(), instructionType.end(), instructionType.begin(),
+                   [](unsigned char c){ return std::toupper(c); });
+
+    if (instructionType == "DECLARE") {
+        std::string varName;
+        std::string valueStr;
+        iss >> varName >> valueStr;
+        try {
+            // Use stoul with base 0 to automatically detect hex, octal, or decimal
+            unsigned long value = std::stoul(valueStr, nullptr, 0);
+            return std::make_unique<DeclareInstruction>(varName, static_cast<uint16_t>(value));
+        } catch (const std::exception& e) {
+            return nullptr;
+        }
+    } else if (instructionType == "ADD") {
+        std::string dest, op1, op2;
+        iss >> dest >> op1 >> op2;
+        return std::make_unique<AddInstruction>(dest, op1, op2);
+    } else if (instructionType == "SUBTRACT") {
+        std::string dest, op1, op2;
+        iss >> dest >> op1 >> op2;
+        return std::make_unique<SubtractInstruction>(dest, op1, op2);
+    } else if (instructionType == "PRINT") {
+        std::string message;
+        std::getline(iss, message);
+        if (!message.empty() && message.front() == ' ') {
+            message.erase(0, 1);
+        }
+        return std::make_unique<PrintInstruction>(message);
+    } else if (instructionType == "SLEEP") {
+        std::string ticksStr;
+        iss >> ticksStr;
+        try {
+            int ticks = std::stoi(ticksStr);
+            return std::make_unique<SleepInstruction>(static_cast<uint8_t>(ticks));
+        } catch (const std::exception& e) {
+            return nullptr;
+        }
+    } /*else if (instructionType == "READ") {
+        std::string varName;
+        std::string addressStr;
+        iss >> varName >> addressStr;
+        try {
+            size_t address = std::stoul(addressStr, nullptr, 0); // Handles hex and dec
+            return std::make_unique<ReadInstruction>(varName, address);
+        } catch (const std::exception& e) {
+            return nullptr;
+        }
+    } else if (instructionType == "WRITE") {
+        std::string addressStr;
+        std::string varName;
+        iss >> addressStr >> varName;
+        try {
+            size_t address = std::stoul(addressStr, nullptr, 0); // Handles hex and dec
+            return std::make_unique<WriteInstruction>(address, varName);
+        } catch (const std::exception& e) {
+            return nullptr;
+        }
+    }*/
+    return nullptr;
 }

@@ -353,13 +353,9 @@ void ShellPrompt::handleScreenCreate(const std::vector<std::string>& args) {
     }
 
     if (!rawInstructions.empty()) {
-        // Call the kernel to create the process with the parsed instructions
-        // kernel.createProcessFromUserInstructions(processName, rawInstructions);
-        kernel.print("Process '" + processName + "' created and added to the ready queue.\n");
-
-        // Print out the instructions to match the desired output
-        for (const auto& instruction : rawInstructions) {
-            kernel.print(instruction + "\n");
+        Process* processCreated = kernel.createUserDefinedProcess(processName, rawInstructions);
+        if (processCreated) {
+            handleScreenMenu(processCreated);
         }
     } else {
         kernel.print("Error: Instructions cannot be empty.\n");
