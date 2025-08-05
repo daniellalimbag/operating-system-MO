@@ -297,10 +297,6 @@ void ShellPrompt::handleScreenStart(const std::vector<std::string>& args) {
 }
 
 void ShellPrompt::handleScreenCreate(const std::vector<std::string>& args) {
-    if (args.size() < 3) {
-        kernel.print("Usage: screen -c <process_name> \"<instructions>;\"\n");
-        return;
-    }
     std::string processName = args[1];
 
     // Reconstruct the instruction string from the command line arguments
