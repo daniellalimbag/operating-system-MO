@@ -57,15 +57,6 @@ public: // Public interface for Kernel interaction
     void addToLog(const std::string& message);
     const std::vector<std::string>& getLogBuffer() const { return m_logBuffer; }
 
-    // =====================================================================
-    // Specialized helper objects (e.g., SymbolTable, ProcessLogger)
-    // and their associated data/methods will be placed here in future versions
-    // after initial core process functionality is established.
-    // For example:
-    // std::map<std::string, uint16_t> variables; // For process's local variables
-    // std::vector<LogEntry> log_buffer;          // For process's screen output
-    // std::vector<LoopContext> loop_stack;       // For FOR loop management
-    // =====================================================================
 private:
     uint32_t m_pid;
     std::string m_processName;
