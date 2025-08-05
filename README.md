@@ -19,12 +19,12 @@ Inspired by tools like nvidia-smi, vmstat, and screen, this project aims to mimi
 
 ## Main Menu Commands
 Command	   Description
-`process-smi`	Shows high-level memory usage and process allocations.
-`vmstat`	Displays detailed active/inactive process and memory stats.
-`screen -s <name> <size>`	Creates a process with the given name and memory size.
-`screen -c <name> <size> "<instructions>"`	Creates a process with a script of up to 50 instructions.
-`screen -r <name>`	Attaches to a running process screen.
-`scheduler-start`	Starts scheduling all processes using current policy.
+-`process-smi`	Shows high-level memory usage and process allocations.
+-`vmstat`	Displays detailed active/inactive process and memory stats.
+-`screen -s <name> <size>`	Creates a process with the given name and memory size.
+-`screen -c <name> <size> "<instructions>"`	Creates a process with a script of up to 50 instructions.
+-`screen -r <name>`	Attaches to a running process screen.
+-`scheduler-start`	Starts scheduling all processes using current policy.
 
 
 ## How to Build
