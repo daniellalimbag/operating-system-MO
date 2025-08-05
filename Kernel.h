@@ -49,6 +49,11 @@ public:
     void printHorizontalLine() const;
     bool getIsInitialized() const { return m_isInitialized.load(); }
 
+    // Public Memory Access APIs
+    void handleMemoryAccess(Process& process, size_t virtualAddress);
+    uint16_t readMemory(Process& process, size_t virtualAddress);
+    void writeMemory(Process& process, size_t virtualAddress, uint16_t data);
+
 private:
     std::vector<std::unique_ptr<Process>> m_processes;  // Stores all processes managed by the kernel
     uint32_t m_nextPid;                                 // Counter for assigning unique PIDs
@@ -79,7 +84,8 @@ private:
     std::vector<CPUCore> m_cpuCores;            // Virtual representation of CPU cores
     std::queue<Process*> m_readyQueue;          // Virtual representation of the ready queue for scheduling
     std::vector<Process*> m_waitingQueue;       // Pointers to handle waiting processes before putting in the ready queue
-    std::vector<uint32_t> m_pageTable;          // Virtual representation of the page table. Index = Frame, Value = Process ID
+    std::vector<uint16_t> m_physicalMemory;     // Virtual representation of physical memory
+    std::vector<bool> m_frameStatus;            // Free frame list to keep track of which frame is available
     uint32_t m_totalFrames;
 
     // Internal Kernel Operations
@@ -89,4 +95,5 @@ private:
     bool checkIfBusy();
     Process* generateDummyProcess(const std::string& newPname, uint32_t memRequired);
     void displayProcess(Process* process) const;
+    ssize_t findFreeFrame() const;
 };

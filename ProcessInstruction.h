@@ -1,101 +1,80 @@
+// ProcessInstruction.h
 #pragma once
 
 #include <string>
-#include <vector>
-#include <memory>
-#include <cstdint>
 
-class Process;
+class Process; // Forward declaration
+class Kernel;  // Forward declaration
 
-/**
- * @enum InstructionType
- * @brief Defines the type of a process instruction.
- */
 enum class InstructionType {
-    ADD,
-    PRINT,
     DECLARE,
+    ADD,
     SUBTRACT,
+    PRINT,
     SLEEP
 };
 
 /**
  * @class IProcessInstruction
- * @brief Base interface for all process instructions.
- * @details Provides a polymorphic interface for executing instructions.
+ * @brief Abstract base class for all process instructions.
  */
 class IProcessInstruction {
 public:
     virtual ~IProcessInstruction() = default;
-    virtual void execute(Process& process) = 0;
+    virtual void execute(Process& process, Kernel& kernel) = 0; // Updated signature
     virtual InstructionType getType() const = 0;
 };
 
-// --- Concrete Instruction Classes ---
+// Concrete Instruction Classes
+class DeclareInstruction : public IProcessInstruction {
+private:
+    std::string m_varName;
+    uint16_t m_value;
 
-/**
- * @class AddInstruction
- * @brief Represents an ADD instruction: var1 = var2/value + var3/value.
- */
-class AddInstruction : public IProcessInstruction {
-    std::string var1_name;    // Variable to store the result
-    std::string var2_operand; // Can be a variable name or a literal value
-    std::string var3_operand; // Can be a variable name or a literal value
 public:
-    AddInstruction(const std::string& v1_name, const std::string& v2_op, const std::string& v3_op)
-        : var1_name(v1_name), var2_operand(v2_op), var3_operand(v3_op) {}
-    void execute(Process& process) override;
+    DeclareInstruction(const std::string& varName, uint16_t value) : m_varName(varName), m_value(value) {}
+    void execute(Process& process, Kernel& kernel) override;
+    InstructionType getType() const override { return InstructionType::DECLARE; }
+};
+
+class AddInstruction : public IProcessInstruction {
+private:
+    std::string m_destination;
+    std::string m_operand1;
+    std::string m_operand2;
+public:
+    AddInstruction(const std::string& destination, const std::string& operand1, const std::string& operand2)
+        : m_destination(destination), m_operand1(operand1), m_operand2(operand2) {}
+    void execute(Process& process, Kernel& kernel) override;
     InstructionType getType() const override { return InstructionType::ADD; }
 };
 
-/**
- * @class SubtractInstruction
- * @brief Represents a SUBTRACT instruction: var1 = var2/value - var3/value.
- */
 class SubtractInstruction : public IProcessInstruction {
-    std::string var1_name;
-    std::string var2_operand;
-    std::string var3_operand;
+private:
+    std::string m_destination;
+    std::string m_operand1;
+    std::string m_operand2;
 public:
-    SubtractInstruction(const std::string& v1_name, const std::string& v2_op, const std::string& v3_op)
-        : var1_name(v1_name), var2_operand(v2_op), var3_operand(v3_op) {}
-    void execute(Process& process) override;
+    SubtractInstruction(const std::string& destination, const std::string& operand1, const std::string& operand2)
+        : m_destination(destination), m_operand1(operand1), m_operand2(operand2) {}
+    void execute(Process& process, Kernel& kernel) override;
     InstructionType getType() const override { return InstructionType::SUBTRACT; }
 };
 
-/**
- * @class SleepInstruction
- * @brief Represents a SLEEP instruction, causing the process to wait for a specified number of CPU ticks.
- */
-class SleepInstruction : public IProcessInstruction {
-    int ticks; // Duration to sleep in CPU ticks
-public:
-    SleepInstruction(int t) : ticks(t) {}
-    void execute(Process& process) override;
-    InstructionType getType() const override { return InstructionType::SLEEP; }
-};
-
-/**
- * @class PrintInstruction
- * @brief Represents a PRINT instruction, displaying a message to the process's log.
- */
 class PrintInstruction : public IProcessInstruction {
-    std::string message; // The message to print, potentially with variable interpolation
+private:
+    std::string m_message;
 public:
-    PrintInstruction(const std::string& msg) : message(msg) {}
-    void execute(Process& process) override;
+    PrintInstruction(const std::string& message) : m_message(message) {}
+    void execute(Process& process, Kernel& kernel) override;
     InstructionType getType() const override { return InstructionType::PRINT; }
 };
 
-/**
- * @class DeclareInstruction
- * @brief Represents a DECLARE instruction: DECLARE(variableName, value).
- */
-class DeclareInstruction : public IProcessInstruction {
-    std::string varName; // Name of the variable to declare
-    uint16_t value;      // Initial value of the variable
+class SleepInstruction : public IProcessInstruction {
+private:
+    uint8_t m_ticksToSleep;
 public:
-    DeclareInstruction(const std::string& var, uint16_t val) : varName(var), value(val) {}
-    void execute(Process& process) override;
-    InstructionType getType() const override { return InstructionType::DECLARE; }
+    SleepInstruction(uint8_t ticks) : m_ticksToSleep(ticks) {}
+    void execute(Process& process, Kernel& kernel) override;
+    InstructionType getType() const override { return InstructionType::SLEEP; }
 };

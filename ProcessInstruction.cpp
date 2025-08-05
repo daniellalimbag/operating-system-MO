@@ -1,102 +1,80 @@
+// ProcessInstruction.cpp
 #include "ProcessInstruction.h"
 #include "Process.h"
+#include "Kernel.h"
+#include <iostream>
+#include <stdexcept>
+#include <limits>
 
-#include <chrono>
-#include <iomanip>
-#include <ctime>
-#include <sstream>
-
-// --- AddInstruction Implementation ---
-void AddInstruction::execute(Process& process) {
-    uint16_t val2 = process.getVariableValue(var2_operand);
-    uint16_t val3 = process.getVariableValue(var3_operand);
-    uint16_t sum = process.clampUint16(static_cast<int>(val2) + static_cast<int>(val3));
-    process.setVariableValue(var1_name, sum);
-}
-
-// --- SubtractInstruction Implementation ---
-void SubtractInstruction::execute(Process& process) {
-    uint16_t val2 = process.getVariableValue(var2_operand);
-    uint16_t val3 = process.getVariableValue(var3_operand);
-    int diff = static_cast<int>(val2) - static_cast<int>(val3);
-    uint16_t result = process.clampUint16(diff);
-    process.setVariableValue(var1_name, result);
-}
-
-// --- SleepInstruction Implementation ---
-void SleepInstruction::execute(Process& process) {
-    process.setSleepTicks(ticks);
-}
-
-// --- PrintInstruction Implementation ---
-void PrintInstruction::execute(Process& process) {
-    std::string output = message;
-
-    auto now = std::chrono::system_clock::now();                                // 1. Get the current time_point from system_clock
-    std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);         // 2. Convert to std::time_t for date/time components (seconds resolution)
-    std::tm local_tm;                                                           // 3. Convert to std::tm structure for local time components (thread-safe way)
-    #ifdef _WIN32
-        localtime_s(&local_tm, &now_time_t); // Windows-specific, thread-safe
-    #else
-        localtime_r(&now_time_t, &local_tm); // POSIX (Linux/macOS) specific, thread-safe
-    #endif
-
-                                                                                // 4. Calculate the microseconds component.
-    auto us_since_epoch = std::chrono::duration_cast<std::chrono::microseconds>(
-        now.time_since_epoch()                                                  // First, get the duration since epoch in microseconds
-    );
-    auto fractional_microseconds = us_since_epoch.count() % 1000000;            // Then, subtract the whole seconds converted to microseconds to get just the fractional part. Modulo 1,000,000 to get remainder
-    std::ostringstream oss;                                                     // 5. Format the output string using stringstream
-    oss << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S");
-    oss << "." << std::setfill('0') << std::setw(6) << fractional_microseconds; // Append microseconds (zero-padded to 6 digits)
-    std::string formatted_time = oss.str();
-
-    uint32_t coreId = process.getCurrentExecutionCoreId();
-
-    // Prepend timestamp and core ID to the output message
-    std::string prefix = "  [" + formatted_time + "] [Core " + std::to_string(coreId) + "] "; //
-    output.insert(0, prefix);
-
-    // Find and replace '+var' syntax for variable interpolation
-    size_t pos = 0;
-    while ((pos = output.find('+', pos)) != std::string::npos) {
-        size_t varStart = pos + 1; // Start after the '+'
-
-        // Ensure there's enough string left to be a variable name
-        if (varStart >= output.size()) {
-            pos++; // Move past the lonely '+'
-            continue;
-        }
-
-        // Check if the character after '+' is valid for a variable name start (letter or underscore)
-        if (std::isalpha(output[varStart]) || output[varStart] == '_') {
-            size_t varEnd = varStart;
-            // Continue as long as characters are alphanumeric or underscore
-            while (varEnd < output.size() &&
-                   (std::isalnum(output[varEnd]) || output[varEnd] == '_')) {
-                varEnd++;
-            }
-
-            if (varEnd > varStart) { // Found a valid variable name
-                std::string varName = output.substr(varStart, varEnd - varStart);
-                uint16_t varValue = process.getVariableValue(varName); // Get value from process
-
-                // Replace "+varName" with its string value
-                output.replace(pos, varEnd - pos, std::to_string(varValue));
-                pos += std::to_string(varValue).length(); // Advance position by length of replaced string
-            } else {
-                pos++; // Only '+' was found, no valid variable name immediately after
+namespace {
+    // Helper function to resolve an operand's value, which is local to this file.
+    uint16_t resolveOperand(const std::string& operand, Process& process, Kernel& kernel) {
+        if (process.hasVariable(operand)) {
+            // Operand is a declared variable, read its value
+            size_t virtualAddress = process.getVirtualAddressForVariable(operand);
+            return kernel.readMemory(process, virtualAddress);
+        } else if (process.isNumeric(operand)) {
+            // Operand is a numeric literal, convert it to a number
+            try {
+                int value = std::stoi(operand);
+                return process.clampUint16(value);
+            } catch (const std::out_of_range& e) {
+                // Handle out-of-range numbers
+                std::cerr << "Process " << process.getPid() << ": Operand '" << operand << "' out of range. Terminating process." << std::endl;
+                process.setState(ProcessState::TERMINATED);
+                return 0;
             }
         } else {
-            pos++; // Not a variable interpolation, just a '+' character
+            // Operand is an undeclared variable name, auto-declare it and initialize to 0
+            process.allocateVariable(operand);
+            size_t virtualAddress = process.getVirtualAddressForVariable(operand);
+            kernel.handleMemoryAccess(process, virtualAddress);
+            kernel.writeMemory(process, virtualAddress, 0);
+            return 0;
         }
     }
-
-    // Add the final processed string to the process's log
-    process.addToLog(output);
 }
 
-// --- DeclareInstruction Implementation ---
-void DeclareInstruction::execute(Process& process) {
-    process.declareVariable(varName, value);
+void DeclareInstruction::execute(Process& process, Kernel& kernel) {
+    process.allocateVariable(m_varName);
+    size_t virtualAddress = process.getVirtualAddressForVariable(m_varName);
+
+    kernel.handleMemoryAccess(process, virtualAddress);
+    kernel.writeMemory(process, virtualAddress, m_value);
+}
+
+void AddInstruction::execute(Process& process, Kernel& kernel) {
+    uint16_t val1 = resolveOperand(m_operand1, process, kernel);
+    uint16_t val2 = resolveOperand(m_operand2, process, kernel);
+
+    int result = static_cast<int>(val1) + static_cast<int>(val2);
+    uint16_t clampedResult = process.clampUint16(result);
+
+    process.allocateVariable(m_destination);
+    size_t virtualAddress = process.getVirtualAddressForVariable(m_destination);
+    kernel.handleMemoryAccess(process, virtualAddress);
+    kernel.writeMemory(process, virtualAddress, clampedResult);
+}
+
+void SubtractInstruction::execute(Process& process, Kernel& kernel) {
+    uint16_t val1 = resolveOperand(m_operand1, process, kernel);
+    uint16_t val2 = resolveOperand(m_operand2, process, kernel);
+
+    int result = static_cast<int>(val1) - static_cast<int>(val2);
+    uint16_t clampedResult = process.clampUint16(result);
+
+    process.allocateVariable(m_destination);
+    size_t virtualAddress = process.getVirtualAddressForVariable(m_destination);
+    kernel.handleMemoryAccess(process, virtualAddress);
+    kernel.writeMemory(process, virtualAddress, clampedResult);
+}
+
+void PrintInstruction::execute(Process& process, Kernel& kernel) {
+    (void)kernel;
+    process.addToLog("PRINT: " + m_message);
+}
+
+void SleepInstruction::execute(Process& process, Kernel& kernel) {
+    (void)kernel;
+    process.setSleepTicks(m_ticksToSleep);
 }

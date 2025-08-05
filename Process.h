@@ -5,10 +5,13 @@
 #include <vector>
 #include <chrono>
 #include <map>
+#include <algorithm>
+#include <cctype>
 
 #include "ProcessInstruction.h"
+#include "SystemConfig.h"
 
-class Kernel;
+class Kernel; // Forward declaration
 
 /**
  * @enum ProcessState
@@ -25,8 +28,7 @@ enum class ProcessState {
 /**
  * @class Process
  * @brief Represents a single process in the Simple OS.
- * @details This initial version focuses on identity, state, control flow, and lifecycle.
- * Other functionalities (variables, logging, complex instructions) are deferred.
+ * @details This version implements virtual memory for process variables.
  */
 class Process {
 public: // Public interface for Kernel interaction
@@ -35,7 +37,7 @@ public: // Public interface for Kernel interaction
     // Core Lifecycle & Execution Methods
     void setState(ProcessState newState);
     bool isFinished() const;
-    void executeNextInstruction(uint32_t coreId);
+    void executeNextInstruction(uint32_t coreId, Kernel& kernel);
 
     // Public Getters for Read-Only Information
     uint32_t getPid() const { return m_pid; }
@@ -48,19 +50,27 @@ public: // Public interface for Kernel interaction
     uint32_t getCurrentExecutionCoreId() const { return m_currentExecutionCoreId; }
     uint32_t getMemoryRequired() const { return m_memoryRequired; }
 
+    std::map<size_t, size_t>& getPageTable() { return m_pageTable; }
+
+    // New and updated methods for variable handling
+    void allocateVariable(const std::string& varName);
+    bool hasVariable(const std::string& varName) const;
+    size_t getVirtualAddressForVariable(const std::string& varName) const;
+
     void decrementSleepTicks() { if (m_sleepTicksRemaining > 0) m_sleepTicksRemaining--; }
     void setSleepTicks(uint8_t ticks);
-    void declareVariable(const std::string& varName, uint16_t value);
-    uint16_t getVariableValue(const std::string& operand);
-    void setVariableValue(const std::string& varName, uint16_t value);
     uint16_t clampUint16(int value);
     void addToLog(const std::string& message);
     const std::vector<std::string>& getLogBuffer() const { return m_logBuffer; }
+    bool isNumeric(const std::string& str) const;
 
 private:
     uint32_t m_pid;
     std::string m_processName;
     uint32_t m_memoryRequired;
+    std::map<size_t, size_t> m_pageTable;
+    std::map<std::string, size_t> m_variableAddresses; // Maps var name to its virtual address
+    size_t m_nextVirtualAddressOffset;                 // The next available virtual address
 
     // Control Flow Variables
     ProcessState m_currentState;
@@ -72,7 +82,6 @@ private:
     uint8_t m_sleepTicksRemaining;                          // Used specifically for SLEEP instruction
 
     // Process-specific data
-    std::map<std::string, uint16_t> m_variables; // For process's local variables
     std::vector<std::string> m_logBuffer;       // For process's screen output (PRINT statements)
 
     // Current execution context

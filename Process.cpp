@@ -1,28 +1,34 @@
+// Process.cpp
 #include "Process.h"
 #include "ProcessInstruction.h"
+#include "Kernel.h"
 
 #include <iostream>
 #include <string>
 #include <limits>
 #include <algorithm>
+#include <stdexcept>
 
 Process::Process(uint32_t id, std::string processName, uint32_t memoryRequired, std::vector<std::unique_ptr<IProcessInstruction>>&& cmds)
     : m_pid(id),
       m_processName(processName),
       m_memoryRequired(memoryRequired),
+      m_pageTable(),
+      m_variableAddresses(),
+      m_nextVirtualAddressOffset(0),
       m_currentState(ProcessState::NEW),
       m_instructions(std::move(cmds)),
       m_programCounter(0UL),
       m_creationTime(std::chrono::system_clock::now()),
-      m_sleepTicksRemaining(0U) {}
+      m_sleepTicksRemaining(0U),
+      m_logBuffer(),
+      m_currentExecutionCoreId(-1) {}
 
 void Process::setState(ProcessState newState) {
     m_currentState = newState;
 }
 
 bool Process::isFinished() const {
-    // A process is finished if its main program counter is at or beyond the end
-    // AND its loop stack is empty (no pending FOR loops).
     return (m_programCounter >= m_instructions.size());
 }
 
@@ -34,26 +40,17 @@ void Process::setSleepTicks(uint8_t ticks) {
     }
 }
 
-void Process::executeNextInstruction(uint32_t coreId) {
+void Process::executeNextInstruction(uint32_t coreId, Kernel& kernel) {
     if (m_currentState != ProcessState::RUNNING) {
         std::cerr << "Error: Process " << getPid() << " attempted to execute while not RUNNING. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << " " << m_programCounter << "/" << m_instructions.size() << "\n";
         return;
     }
 
-    m_currentExecutionCoreId = coreId;          // Store the current execution context
-
-    /*
-    std::cout << "Process " << getPid() << " executing. Current State: " << static_cast<int>(m_currentState) << "Instruction type: " << static_cast<int>(m_instructions[m_programCounter]->getType()) << " " << m_programCounter << "/" << m_instructions.size() << "\n";
-    */
+    m_currentExecutionCoreId = coreId;
 
     if (m_programCounter < m_instructions.size()) {
         const std::unique_ptr<IProcessInstruction>& current_instruction = m_instructions[m_programCounter];
-
-        /*
-        std::cout << m_processName << ": Executing instruction type: " << static_cast<int>(current_instruction->getType()) << " Line: " << static_cast<int>(m_programCounter) << "\n";
-        */
-
-        current_instruction->execute(*this);
+        current_instruction->execute(*this, kernel);
         m_programCounter++;
     }
 
@@ -72,26 +69,41 @@ uint16_t Process::clampUint16(int value) {
     return static_cast<uint16_t>(value);
 }
 
-void Process::declareVariable(const std::string& varName, uint16_t value) {
-    m_variables[varName] = value;
+void Process::allocateVariable(const std::string& varName) {
+    if (m_variableAddresses.count(varName)) {
+        return;
+    }
+
+    const size_t VARIABLE_SIZE = 2; // Assuming uint16_t variables
+    const size_t MAX_VARIABLE_SPACE = 64;
+
+    if (m_nextVirtualAddressOffset + VARIABLE_SIZE > MAX_VARIABLE_SPACE) {
+        std::cerr << "Process " << m_pid << ": Cannot allocate variable '" << varName
+                  << "'. Variable memory space exhausted.\n";
+        return;
+    }
+
+    m_variableAddresses[varName] = m_nextVirtualAddressOffset;
+    m_nextVirtualAddressOffset += VARIABLE_SIZE;
 }
 
-uint16_t Process::getVariableValue(const std::string& var) {
-    if (m_variables.find(var) != m_variables.end()) {
-        return m_variables[var];
-    }
-    try {
-        int value = std::stoi(var);
-        return clampUint16(value);
-    } catch (...) {
-        // If neither variable nor number, auto-declare as 0 as stated in the specs
-        m_variables[var] = 0;
-        return 0;
-    }
+bool Process::hasVariable(const std::string& varName) const {
+    return m_variableAddresses.count(varName) > 0;
 }
 
-void Process::setVariableValue(const std::string& var, uint16_t value) {
-    m_variables[var] = clampUint16(value);
+size_t Process::getVirtualAddressForVariable(const std::string& varName) const {
+    auto it = m_variableAddresses.find(varName);
+    if (it != m_variableAddresses.end()) {
+        return it->second;
+    }
+    return -1; // Return an invalid address
+}
+
+bool Process::isNumeric(const std::string& str) const {
+    if (str.empty()) {
+        return false;
+    }
+    return std::all_of(str.begin(), str.end(), [](unsigned char c){ return std::isdigit(c); });
 }
 
 void Process::addToLog(const std::string& message) {

@@ -25,7 +25,7 @@ namespace {
 // ===================================================
 
 Kernel::Kernel()
-    : m_nextPid(1U),
+    : m_nextPid(0U),
       m_cpuTicks(0ULL),
       m_isInitialized(false),
       m_activeTicks(0ULL),
@@ -65,15 +65,17 @@ void Kernel::initialize(const SystemConfig& config) {
             m_cpuCores[i].currentQuantumTicks = 0U;
         }
 
-        // Initialize Page Table
+        // Initialize Frames and Physical Memory
         m_totalFrames = m_maxOverallMem / m_memPerFrame;
-        m_pageTable.resize(m_totalFrames);
+        m_physicalMemory.resize(m_maxOverallMem / 2);
+        m_frameStatus.resize(m_totalFrames, true);
 
         m_isInitialized.store(true);
 
         printHorizontalLine();
         print("Kernel: Kernel initialized with " + std::to_string(m_numCpus) + " CPU cores.\n");
-        print("Kernel: Page Table initialized with " + std::to_string(m_totalFrames) + " total frames.\n");
+        print("Kernel: Kernel initialized with " + std::to_string(m_totalFrames) + " total frames.\n");
+        print("Kernel: Kernel initialized with " + std::to_string(m_maxOverallMem) + " total physical memory.\n");
         printHorizontalLine();
     }
     m_cv.notify_one();
@@ -171,7 +173,7 @@ void Kernel::listStatus() const {
     }
 
     print("\n");
-    print("CPU Utilization: " + std::to_string((static_cast<float>(coresBusy) / static_cast<float>(m_numCpus)) * 100.0f) + "\%\n");
+    std::cout << "CPU Utilization: " << (static_cast<float>(coresBusy) / static_cast<float>(m_numCpus)) * 100.0f << "\%\n";
     print("Cores used: " + std::to_string(coresBusy) + "\n");
     print("Cores available: " + std::to_string(m_numCpus - coresBusy) + "\n");
     printHorizontalLine();
@@ -287,21 +289,36 @@ void Kernel::printMemoryUtilizationReport() const {
     }
 
     uint32_t framesOccupied = 0;
-    for(uint32_t frame : m_pageTable) {
-        if (frame!=0) {
-            ++framesOccupied;
+    for(const auto& p_ptr : m_processes) {
+        if (p_ptr->getState() != ProcessState::TERMINATED) {
+            framesOccupied += p_ptr->getPageTable().size();
         }
     }
+
     std::cout << "CPU Utilization: " << ((static_cast<float>(coresBusy) / static_cast<float>(m_numCpus)) * 100.0f) << "\%\n";
     std::cout << "Memory Usage: " << framesOccupied * m_memPerFrame << "B/" << m_maxOverallMem << "B\n";
     std::cout << "Memory Utilization: " << ((static_cast<float>(framesOccupied) / static_cast<float>(m_totalFrames)) * 100.0f) << "\%\n";
     std::cout << "Memory per frame: " << m_memPerFrame << "B \n";
 
     printHorizontalLine();
-    for (uint32_t i = 0; i < m_totalFrames; ++i) {
-        uint32_t processId = m_pageTable[i];
-        std::cout << "Frame " << i << ": " << ((processId != 0) ? ("Process " + std::to_string(processId) + "\n"):"Unoccupied\n");
+
+    std::vector<int> frameOccupancy(m_totalFrames, -1);
+    for (const auto& p_ptr : m_processes) {
+        if (p_ptr->getState() != ProcessState::TERMINATED) {
+            for (const auto& pair : p_ptr->getPageTable()) {
+                frameOccupancy[pair.second] = p_ptr->getPid();
+            }
+        }
     }
+
+    for (uint32_t i = 0; i < m_totalFrames; ++i) {
+        if (frameOccupancy[i] != -1) {
+            std::cout << "Frame " << i << ": Process " << frameOccupancy[i] << "\n";
+        } else {
+            std::cout << "Frame " << i << ": Unoccupied\n";
+        }
+    }
+
     printHorizontalLine();
 }
 
@@ -309,9 +326,9 @@ void Kernel::printMemoryStatistics() const {
     std::lock_guard<std::mutex> lock(m_kernelMutex);
 
     uint32_t framesOccupied = 0;
-    for(uint32_t frame : m_pageTable) {
-        if (frame!=0) {
-            ++framesOccupied;
+    for(const auto& p_ptr : m_processes) {
+        if (p_ptr->getState() != ProcessState::TERMINATED) {
+            framesOccupied += p_ptr->getPageTable().size();
         }
     }
     std::cout << "Total Memory: " << m_maxOverallMem << "B\n";
@@ -383,19 +400,17 @@ void Kernel::updateWaitingQueue() {
 }
 
 void Kernel::scheduleProcesses() {
-    for (auto& core : m_cpuCores) {                             // Iterate in order of the core id
+    for (auto& core : m_cpuCores) {
         if (m_readyQueue.empty()) {
             return;
         }
-        if (!core.isBusy) {                                     // If the core is idle
-            Process* p_to_schedule = m_readyQueue.front();      // Get the front process (FCFS)
-            m_readyQueue.pop();                                 // Remove it from the queue
-            core.currentProcess = p_to_schedule;                // Assign the process to the core
-            core.isBusy = true;                                 // Mark it as busy
-            core.currentQuantumTicks = 0U;                      // Reset quantum counter for this newly assigned process
-            p_to_schedule->setState(ProcessState::RUNNING);     // Set process as running so it can execute
-
-            //std::cout << "[Scheduler] Assigned Process " << p_to_schedule->getPname() << " (PID " << p_to_schedule->getPid() << ") to Core " << core.id << ".\n";
+        if (!core.isBusy) {
+            Process* p_to_schedule = m_readyQueue.front();
+            m_readyQueue.pop();
+            core.currentProcess = p_to_schedule;
+            core.isBusy = true;
+            core.currentQuantumTicks = 0U;
+            p_to_schedule->setState(ProcessState::RUNNING);
         }
     }
 }
@@ -406,51 +421,14 @@ bool Kernel::executeAllCores() {
         if (core.isBusy && core.currentProcess != nullptr) {
             Process* p = core.currentProcess;
             if (p->getState() != ProcessState::RUNNING) {
-                //std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " still waiting.\n";
                 continue;
             }
-            uint32_t framePointer;
-            uint32_t pagesRequired = static_cast<uint32_t>(std::ceilf(static_cast<float>(p->getMemoryRequired()) / static_cast<float>(m_memPerFrame)));
-            for (framePointer = 0U; framePointer < m_totalFrames; ++framePointer) {
-                if (m_pageTable[framePointer] == p->getPid()) {
-                    break;
-                }
-            }
-            if (framePointer == m_totalFrames) {
-                // refactor it to this:
-                // framePointer = doPageFaultHandling(pagesRequired);
-                // if (framePointer == m_totalFrames) continue;                 // if couldn't find victim frame, don't execute
-                uint32_t pageCounter = 0U;
-                for (framePointer = 0U; framePointer < m_totalFrames; ++framePointer) {
-                    if (m_pageTable[framePointer] == 0U) {
-                        ++pageCounter;
-                        if (pageCounter >= pagesRequired) {
-                            break;
-                        }
-                        continue;
-                    } else {
-                        pageCounter = 0U;
-                    }
-                }
-                if (framePointer == m_totalFrames && pageCounter < pagesRequired) {
-                    //std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " could not be executed.\n";
-                    continue;
-                } else {
-                    while (pageCounter > 0U) {
-                        m_pageTable[framePointer] = p->getPid();
-                        --framePointer;
-                        --pageCounter;
-                        ++m_numPagedIn;
-                    }
-                    ++framePointer;
-                    //std::cout << "Page fault handling success, Frame Pointer at " << framePointer << "\n";
-                }
-            }
-            p->executeNextInstruction(core.id);
+
+            p->executeNextInstruction(core.id, *this);
             executeSuccess = true;
-            //std::cout << "[Tick " << m_cpuTicks << "] [Core " << core.id << "] " << core.currentProcess->getPname() << " executed at frames " << framePointer << " to " << framePointer + pagesRequired - 1 << ".\n";
+
             if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
-                core.currentQuantumTicks++;                                 // Increment quantum only for Round Robin
+                core.currentQuantumTicks++;
             }
             if (p->getSleepTicksRemaining() > 0) {
                 p->setState(ProcessState::WAITING);
@@ -458,30 +436,27 @@ bool Kernel::executeAllCores() {
                 if (m_schedulerType == SchedulerType::ROUND_ROBIN) {
                     core.currentProcess = nullptr;
                     core.isBusy = false;
-                    for (uint32_t i = 0; i < pagesRequired; ++i) {
-                        m_pageTable[framePointer++] = 0U;
-                        ++m_numPagedOut;
-                    }
                 }
-            } else if (p->isFinished()) {                                   // Checks if process completed all of its instructions
+            } else if (p->isFinished()) {
                 core.currentProcess = nullptr;
                 core.isBusy = false;
                 core.currentQuantumTicks = 0U;
-                for (uint32_t i = 0; i < pagesRequired; ++i) {
-                    m_pageTable[framePointer++] = 0U;
-                    ++m_numPagedOut;
+                for (const auto& pair : p->getPageTable()) {
+                    m_frameStatus[pair.second] = true;
+                    m_numPagedOut++;
                 }
+                p->getPageTable().clear();
             } else if (m_schedulerType == SchedulerType::ROUND_ROBIN && core.currentQuantumTicks >= m_quantumCycles) {
-                // Quantum expired for this process in Round Robin mode
-                p->setState(ProcessState::READY);                           // Preempt process
+                p->setState(ProcessState::READY);
                 m_readyQueue.push(p);
-                core.currentProcess = nullptr;                              // Free the core
+                core.currentProcess = nullptr;
                 core.isBusy = false;
                 core.currentQuantumTicks = 0U;
-                for (uint32_t i = 0; i < pagesRequired; ++i) {
-                    m_pageTable[framePointer++] = 0U;
-                    ++m_numPagedOut;
+                for (const auto& pair : p->getPageTable()) {
+                    m_frameStatus[pair.second] = true;
+                    m_numPagedOut++;
                 }
+                p->getPageTable().clear();
             }
         }
     }
@@ -489,15 +464,12 @@ bool Kernel::executeAllCores() {
 }
 
 bool Kernel::checkIfBusy() {
-    // Check if process generation is running
     if (m_runningGeneration.load()) {
         return true;
     }
-    // Check if either ready queue or waiting processes has items
     if (!m_readyQueue.empty() || !m_waitingQueue.empty()) {
         return true;
     }
-    // Check each core if there is a process running
     for (auto& core : m_cpuCores) {
         if (core.isBusy) {
             return true;
@@ -507,12 +479,10 @@ bool Kernel::checkIfBusy() {
 }
 
 Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memRequired){
-    // static ensures the generator is initialized only once per program run
     static std::random_device rd;
     static std::mt19937 gen(rd());
     SystemConfig defaultConfig;
 
-    // Determine random number of instructions within the specified range
     if (m_minInstructions == 0 || m_maxInstructions == 0 || m_minInstructions > m_maxInstructions) {
         std::cerr << "[Kernel] Warning: Invalid instruction range (" << m_minInstructions
                   << "-" << m_maxInstructions << "). Using default range [1000, 2000].\n";
@@ -524,16 +494,11 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memR
     std::vector<std::unique_ptr<IProcessInstruction>> instructions;
     instructions.reserve(numInstructions);
 
-    // A list of possible variable names to use in dummy processes
     const std::vector<std::string> varNames = {"a", "b", "c", "x", "y", "counter", "temp"};
-    // A distribution for random values (0 to 65,535 for uint16_t)
     std::uniform_int_distribution<uint16_t> distrib_value(std::numeric_limits<uint16_t>::min(), std::numeric_limits<uint16_t>::max());
-    // A distribution for sleep ticks (1 to 255 ticks for uint8_t)
     std::uniform_int_distribution<uint8_t> distrib_sleep_ticks(1, 255);
-    // A distribution for loop repeats (e.g., 1 to 3 repeats)
     std::uniform_int_distribution<int> distrib_loop_repeats(1, 3);
 
-    // A distribution for memory required (e.g., 64 to 65,536 for uint32_t)
     if (memRequired == 0U) {
         if (m_minMemPerProc > m_maxMemPerProc) {
             std::cerr << "[Kernel] Warning: Invalid memory range (" << m_minMemPerProc
@@ -545,26 +510,22 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memR
         memRequired = distrib_mem_required(gen);
     }
 
-    // Define the types of instructions we can generate
     enum class DummyInstructionType {
         ADD, PRINT, DECLARE, SUBTRACT, SLEEP
     };
-    // A distribution for instruction types (e.g., ADD to SLEEP)
     std::uniform_int_distribution<> distrib_instr_type(static_cast<int>(DummyInstructionType::ADD), static_cast<int>(DummyInstructionType::SLEEP));
 
     for (size_t i = 0; i < numInstructions; ++i) {
         DummyInstructionType instrType = static_cast<DummyInstructionType>(distrib_instr_type(gen));
 
-        // Helper to get a random variable name
         auto getRandomVarName = [&]() {
             return varNames[std::uniform_int_distribution<>(0, varNames.size() - 1)(gen)];
         };
 
-        // Helper to get a random variable name or a literal value string
         auto getRandomOperand = [&]() {
-            if (std::uniform_int_distribution<>(0, 1)(gen) == 0) { // 50% chance for variable
+            if (std::uniform_int_distribution<>(0, 1)(gen) == 0) {
                 return getRandomVarName();
-            } else { // 50% chance for a literal number
+            } else {
                 return std::to_string(distrib_value(gen));
             }
         };
@@ -598,15 +559,9 @@ Process* Kernel::generateDummyProcess(const std::string& newPname, uint32_t memR
         }
     }
 
-    // Create the process using std::make_unique
     uint32_t newPid = m_nextPid++;
     std::unique_ptr<Process> newProcess = std::make_unique<Process>(newPid, newPname, memRequired, std::move(instructions));
-
-    // Get a raw pointer to the process before moving ownership to m_processes
-    // This pointer will remain valid as long as the unique_ptr in m_processes manages the object.
     Process* rawProcessPtr = newProcess.get();
-
-    // Add the unique_ptr to the kernel's process list, transferring ownership
     m_processes.push_back(std::move(newProcess));
 
     rawProcessPtr->setState(ProcessState::READY);
@@ -623,7 +578,7 @@ void Kernel::displayProcess(Process* process) const {
     if (logBuffer.empty()) {
         std::cout << "Process log is empty.\n";
     } else {
-        for (const std::string& logEntry : logBuffer) { // Print each entry in the log
+        for (const std::string& logEntry : logBuffer) {
             std::cout << logEntry << "\n";
         }
     }
@@ -631,4 +586,99 @@ void Kernel::displayProcess(Process* process) const {
     std::cout << "Current instruction line: " << process->getCurrentInstructionLine() << "\n";
     std::cout << "Lines of code: " << process->getTotalInstructionLines() << "\n";
     std::cout << "Memory Required: " << process->getMemoryRequired() << "\n";
+}
+
+ssize_t Kernel::findFreeFrame() const {
+    for (size_t i = 0; i < m_frameStatus.size(); ++i) {
+        if (m_frameStatus[i]) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// ===================================================
+// Public Memory Access APIs
+// ===================================================
+
+/**
+ * @brief Handles a memory access request by ensuring the required virtual page is in a physical frame.
+ * @details This function checks for a page fault and, if one occurs, finds a free frame and
+ * updates the process's page table.
+ * @param process The process making the request.
+ * @param virtualAddress The virtual address being accessed.
+ */
+void Kernel::handleMemoryAccess(Process& process, size_t virtualAddress) {
+    size_t virtualPageNumber = virtualAddress / m_memPerFrame;
+
+    // Check if the virtual page is already mapped to a physical frame
+    if (process.getPageTable().find(virtualPageNumber) == process.getPageTable().end()) {
+        //std::cerr << "Kernel: Page fault for PID " << process.getPid() << ", virtual page " << virtualPageNumber << ".\n";
+        ssize_t freeFrameIndex = findFreeFrame();
+
+        if (freeFrameIndex != -1) {
+            m_frameStatus[freeFrameIndex] = false; // Mark frame as occupied
+            process.getPageTable()[virtualPageNumber] = freeFrameIndex; // Map virtual page to physical frame
+            m_numPagedIn++;
+        } else {
+            // In a real OS, you'd use a page replacement algorithm here.
+            std::cerr << "Kernel: Out of physical memory. Cannot handle page fault for PID " << process.getPid() << ".\n";
+            // For now, let's just terminate the process for simplicity.
+            process.setState(ProcessState::TERMINATED);
+        }
+    }
+}
+
+/**
+ * @brief Reads a 16-bit value from a process's virtual address.
+ * @details This function first ensures the page is resident, then translates the address
+ * and reads from the physical memory array.
+ * @param process The process making the request.
+ * @param virtualAddress The virtual address to read from.
+ * @return The 16-bit value read from memory.
+ */
+uint16_t Kernel::readMemory(Process& process, size_t virtualAddress) {
+    handleMemoryAccess(process, virtualAddress);
+    if (process.getState() == ProcessState::TERMINATED) {
+        return 0; // Return a safe value if the process was terminated
+    }
+
+    size_t virtualPageNumber = virtualAddress / m_memPerFrame;
+    size_t physicalFrameNumber = process.getPageTable()[virtualPageNumber];
+    size_t offset = (virtualAddress % m_memPerFrame) / 2; // Divide by 2 because physical memory stores uint16_t
+    size_t physicalAddress = (physicalFrameNumber * (m_memPerFrame / 2)) + offset;
+
+    if (physicalAddress >= m_physicalMemory.size()) {
+        std::cerr << "Kernel: Illegal memory access. Calculated physical address " << physicalAddress << " is out of bounds.\n";
+        return 0;
+    }
+
+    return m_physicalMemory[physicalAddress];
+}
+
+/**
+ * @brief Writes a 16-bit value to a process's virtual address.
+ * @details This function first ensures the page is resident, then translates the address
+ * and writes to the physical memory array.
+ * @param process The process making the request.
+ * @param virtualAddress The virtual address to write to.
+ * @param data The 16-bit value to write.
+ */
+void Kernel::writeMemory(Process& process, size_t virtualAddress, uint16_t data) {
+    handleMemoryAccess(process, virtualAddress);
+    if (process.getState() == ProcessState::TERMINATED) {
+        return; // Do nothing if the process was terminated
+    }
+
+    size_t virtualPageNumber = virtualAddress / m_memPerFrame;
+    size_t physicalFrameNumber = process.getPageTable()[virtualPageNumber];
+    size_t offset = (virtualAddress % m_memPerFrame) / 2;
+    size_t physicalAddress = (physicalFrameNumber * (m_memPerFrame / 2)) + offset;
+
+    if (physicalAddress >= m_physicalMemory.size()) {
+        std::cerr << "Kernel: Illegal memory write. Calculated physical address " << physicalAddress << " is out of bounds.\n";
+        return;
+    }
+
+    m_physicalMemory[physicalAddress] = data;
 }
