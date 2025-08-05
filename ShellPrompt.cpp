@@ -247,8 +247,6 @@ void ShellPrompt::setupCommands() {
             kernel.print("Usage: screen <subcommand> [args...]\n");
             kernel.print("Subcommands: -ls, -r, -s\n");
         }
-        kernel.clearScreen();
-        showHeader(MAIN_SHELL_INSTRUCTIONS);
         return true;
     };
 }
@@ -293,7 +291,7 @@ void ShellPrompt::handleScreenStart(const std::vector<std::string>& args) {
 
 void ShellPrompt::handleScreenMenu(Process* process) {
     std::string screen_command;
-    const std::string screen_prompt_str = process->getPname() + ":\\> ";
+    const std::string screen_prompt_str = process->getPname() + ":\\>";
 
     while (true) {
         screen_command = kernel.readLine(screen_prompt_str);
@@ -306,4 +304,6 @@ void ShellPrompt::handleScreenMenu(Process* process) {
             kernel.print("Invalid command. Please type 'process-smi' or 'exit'.\n");
         }
     }
+    kernel.clearScreen();
+    showHeader(MAIN_SHELL_INSTRUCTIONS);
 }
